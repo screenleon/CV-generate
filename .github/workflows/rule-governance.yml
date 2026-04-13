@@ -1,0 +1,20 @@
+name: Rule Governance
+
+on:
+  pull_request:
+    paths:
+      - "rules/**"
+      - "project/**"
+      - "docs/**"
+      - "scripts/lint-layered-rules.sh"
+  workflow_dispatch:
+
+jobs:
+  lint-layered-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run layered rules linter
+        run: bash scripts/lint-layered-rules.sh

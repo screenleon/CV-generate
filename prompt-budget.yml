@@ -1,0 +1,159 @@
+# prompt-budget.yml
+#
+# Prompt budget configuration for this project.
+# Agents read this file during skill loading and demand-triage to control
+# which roles and skills are active and to respect token budget targets.
+#
+# See docs/adoption-guide.md → Prompt budget trimming for step-by-step guidance.
+# See docs/adoption-guide.md → Autonomous execution mode for execution_mode guidance.
+# See skills/prompt-cache-optimization/SKILL.md → Prompt budget configuration
+# for how agents use this file.
+#
+# HOW TO USE THIS FILE
+# ─────────────────────
+# 1. Copy this file to your repository root.
+# 2. Enable only the roles your project actually uses.
+# 3. Disable skills that do not match your workflow.
+# 4. Adjust token targets based on your model's context window.
+# 5. Set execution_mode if you want autonomous (unattended) operation.
+#
+# This file is informational — agents use it as guidance to select which
+# skills and role templates to load. It does not enforce hard API-level limits.
+#
+# TEMPLATE DEFAULT
+# ─────────────────
+# The defaults below represent a full-featured team project with all roles active
+# and supervised (human-in-the-loop) execution. See commented sections below
+# for autonomous and smaller project configurations.
+
+# ── Execution mode ─────────────────────────────────────────────────────────────
+#
+# supervised (default) — agents STOP at checkpoint gates and wait for user approval.
+# autonomous           — agents auto-proceed at most gates and log decisions instead.
+#
+# IMPORTANT: autonomous mode is opt-in and must be declared explicitly here.
+# Agents must never infer autonomous mode from context.
+# See docs/operating-rules.md → Autonomous execution mode for the full behavior spec.
+#
+execution_mode: supervised  # supervised | autonomous
+
+# ── Autonomous mode options ─────────────────────────────────────────────────────
+# Only read when execution_mode is autonomous. Ignored in supervised mode.
+#
+autonomous_mode:
+  # Gate 1: Plan approval — auto-proceed and log to DECISIONS.md?
+  # Set false to keep manual approval even in autonomous mode.
+  auto_proceed_on_plan: true
+
+  # Gate 3: Scope expansion — auto-proceed if expansion is within original intent?
+  # Agents will still stop if an unrelated module is added.
+  auto_proceed_on_scope_expansion: true
+
+  # Gate 2: Destructive/irreversible actions.
+  # Default true — strongly recommended. Keep true unless the environment is fully isolated/sandboxed.
+  # Setting false means the agent will NOT stop for destructive operations; only do this in sandbox environments.
+  # Note: DECISIONS.md contradictions are always a hard stop regardless of this setting.
+  halt_on_destructive_actions: true
+
+  # Gate 4: Stuck escalation (3 failed fix attempts).
+  # Default true — strongly recommended. Setting false risks infinite loops.
+  # Only set false if you have an external timeout or retry-cap mechanism.
+  halt_on_stuck_escalation: true
+
+  # Whether to skip the critic role entirely in autonomous workflows.
+  # Default false — critic improves implementation quality even without human review.
+  # The critic's output is embedded in the handoff artifact and addressed by implementers.
+  skip_critic_role: false
+
+  # Severity-high findings from risk-reviewer during plan assessment.
+  # Default true — strongly recommended. Setting false means the agent will auto-proceed even on high-risk findings.
+  # Only set false if the codebase is sandboxed and risk findings are pre-acknowledged.
+  halt_on_high_severity_risk: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+budget:
+  # Target for Layer 1 (docs/operating-rules.md + docs/agent-playbook.md)
+  # These files are loaded on every request. Keep them lean.
+  layer1_target_tokens: 4000
+
+  # Maximum for Layer 2 (AGENTS.md + selected skills per task type)
+  # Demand-triage will load only skills.always_load if this is exceeded.
+  layer2_max_tokens: 8000
+
+  # Maximum for Layer 3 (DECISIONS.md + ARCHITECTURE.md)
+  # If DECISIONS.md approaches this limit, trigger the archive procedure.
+  layer3_max_tokens: 3000
+
+roles:
+  # Roles that are available for this project.
+  # Agents will route tasks to these roles per docs/agent-playbook.md routing rules.
+  enabled:
+    - feature-planner
+    - backend-architect
+    - application-implementer
+    - ui-image-implementer
+    - integration-engineer
+    - documentation-architect
+    - risk-reviewer
+    - critic
+
+  # Roles that should never be invoked for this project.
+  # Remove the role's agent file from .claude/agents/ or .github/ as well
+  # to prevent accidental loading.
+  disabled: []
+
+  # ── Smaller project example (comment the above, uncomment this) ──────────────
+  # enabled:
+  #   - feature-planner
+  #   - application-implementer
+  #   - risk-reviewer
+  #   - critic
+  # disabled:
+  #   - backend-architect          # frontend-only project
+  #   - ui-image-implementer       # no design-to-code workflow
+  #   - integration-engineer       # handled inline by application-implementer
+  #   - documentation-architect    # docs are informal, maintained manually
+  # ─────────────────────────────────────────────────────────────────────────────
+
+skills:
+  # Skills loaded on every request (regardless of task type).
+  # Keep this list minimal — these tokens are consumed unconditionally.
+  always_load:
+    - demand-triage
+    - repo-exploration
+
+  # Skills loaded on-demand, appended after the canonical set for the task type.
+  # See skills/prompt-cache-optimization/SKILL.md → Canonical skill sets.
+  on_demand:
+    - error-recovery
+    - memory-and-state
+    - prompt-cache-optimization
+
+  # Skills that should never be loaded for this project.
+  # Reduces per-request token cost for skills that do not match the workflow.
+  disabled: []
+
+  # ── Backend-only project example ─────────────────────────────────────────────
+  # always_load:
+  #   - demand-triage
+  #   - repo-exploration
+  # on_demand:
+  #   - test-and-fix-loop
+  #   - error-recovery
+  #   - memory-and-state
+  # disabled:
+  #   - design-to-code             # no UI work
+  #   - documentation-architecture # docs are informal
+  # ─────────────────────────────────────────────────────────────────────────────
+
+trimming:
+  # Archive DECISIONS.md when it exceeds this file size (in kilobytes).
+  # See skills/memory-and-state/SKILL.md → Memory lifecycle management.
+  decisions_archive_threshold_kb: 30
+
+  # Archive DECISIONS.md when it exceeds this number of entries.
+  decisions_archive_threshold_entries: 50
+
+  # Purge session memory files when count exceeds this number.
+  session_memory_max_files: 10

@@ -1,0 +1,47 @@
+# .markdownlint.yml
+#
+# Markdownlint configuration for this repository.
+# See https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md for all rules.
+#
+# Run locally: npx markdownlint-cli2 "**/*.md"
+
+default: true
+
+# MD013 — Line length. Disabled because long prose and tables are common in docs.
+MD013: false
+
+# MD024 — Multiple headings with the same content.
+# Disabled because skill files and template files intentionally repeat section names
+# (e.g., "## Use this skill when") across multiple files.
+MD024: false
+
+# MD032 — Lists should be surrounded by blank lines.
+# Disabled because numbered-step lists inside prose blocks and template code blocks
+# are used throughout without surrounding blank lines.
+MD032: false
+
+# MD033 — Inline HTML.
+# Disabled because HTML comments are used throughout for adopter annotations.
+MD033: false
+
+# MD034 — No bare URLs.
+# Disabled because docs/external-practices-notes.md uses bare URLs intentionally
+# as reference link lists.
+MD034: false
+
+# MD029 — Ordered list item prefix.
+# Disabled because some lists intentionally continue numbering across section headers
+# (e.g., mandatory checkpoints 1-4 followed by recommended checkpoints 5-6).
+MD029: false
+
+# MD040 — Fenced code blocks should have a language specified.
+# Enabled. All new fenced blocks must declare a language (text, markdown, yaml, etc.).
+MD040: true
+
+# MD041 — First line in file should be a top-level heading.
+# Disabled because YAML front-matter files (skills) start with ---
+MD041: false
+
+# MD060 — Table column style.
+# Disabled because tables with mixed-width prose content cannot always be aligned.
+MD060: false
