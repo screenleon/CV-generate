@@ -10,59 +10,49 @@
 
 | Directory / module | Purpose |
 |-------------------|---------|
-| _example: `src/api/`_ | _HTTP handlers — one file per resource_ |
-| _example: `src/services/`_ | _Business logic — stateless service objects_ |
-| _example: `src/repos/`_ | _Database access — one repo per aggregate_ |
-| _example: `db/migrations/`_ | _SQL migration files (up/down pairs)_ |
-
-<!-- Replace the example rows with your actual directory structure. -->
+| `backend/` | Go HTTP server — entry point (`main.go`) |
+| `backend/handlers/` | HTTP request handlers (one file per resource) |
+| `backend/generators/` | Document generation logic — PDF and Word (DOCX) |
+| `backend/models/` | Shared data models (`CVData`, `Experience`, `Education`, `Language`) |
+| `frontend/` | Static web frontend (HTML + CSS + vanilla JS) |
+| `frontend/css/` | Stylesheet (`style.css`) |
+| `frontend/js/` | Frontend logic (`app.js`) — form collection and API calls |
 
 ## Data flow
 
-<!-- Describe how data moves through the system for the primary user actions.
-     A simple linear diagram is fine.
+```text
+Browser (frontend/index.html)
+  → POST /api/generate  (JSON: CVData)
+    → backend/handlers/GenerateCV
+      → backend/generators/GeneratePDF  or  GenerateWord
+        → returns []byte (PDF / DOCX)
+  ← binary file download (Content-Disposition: attachment)
+```
 
-     Example:
-       Client → HTTP handler (src/api/) → Service (src/services/) → Repository (src/repos/) → PostgreSQL
-       Background jobs: Scheduler → Worker (src/workers/) → Service → DB
-
-     Add notes for async paths, event-driven flows, or external service calls. -->
-
-_Not yet documented. Fill in when adopting._
+Static assets (`/`, `/css/*`, `/js/*`) are served directly by the Go HTTP
+server from the `frontend/` directory.
 
 ## Key interfaces and contracts
 
-<!-- List the major interfaces, shared types, or public API surfaces that multiple modules depend on.
-     Agents use this to understand the blast radius of changes.
-
-     Example format:
-     - `UserService` (src/services/user.ts) — owns user creation, lookup, and auth token generation
-     - `OrderRepository` (src/repos/order.ts) — owns all SQL for orders; no direct DB access outside this file
-     - `POST /api/orders` — external contract; breaking changes require versioning -->
-
-_Not yet documented. Fill in as key interfaces are identified._
+- `models.CVData` (`backend/models/cv.go`) — single source of truth for all CV fields accepted by the API
+- `POST /api/generate` — accepts `application/json` body (CVData), returns PDF or DOCX binary
+- `generators.GeneratePDF(data *models.CVData) ([]byte, error)` — PDF generation entry point
+- `generators.GenerateWord(data *models.CVData) ([]byte, error)` — DOCX generation entry point
+- `CVData.Template` — controls layout: `"simple"` (modern Western), `"japan"` (履歴書 Rirekisho), or `"shokumu"` (職務経歴書 Shokumu Keirekisho)
+- `CVData.Format` — controls output: `"pdf"` or `"word"`/`"docx"`
 
 ## External service dependencies
 
 | Service | Purpose | Notes |
 |---------|---------|-------|
-| _example: PostgreSQL_ | _Primary data store_ | _Connection via DATABASE_URL env var_ |
-| _example: SendGrid_ | _Transactional email_ | _Only used in notification service_ |
-
-<!-- Add any external APIs, message queues, caches, object stores, or third-party services here.
-     Include where credentials come from and which internal module owns the integration. -->
+| `github.com/chromedp/chromedp` | PDF generation | Headless Chromium; renders HTML/CSS templates → full CJK/Unicode support |
+| None (stdlib `archive/zip`) | DOCX generation | DOCX is a ZIP+XML format built with Go stdlib |
 
 ## Deployment units
 
-<!-- If the project has multiple deployable units (monorepo with separate services, packages, or apps),
-     list them here so agents know which changes are cross-unit (higher risk).
-
-     Example:
-     - `apps/api` — Node.js REST API, deployed to Fly.io
-     - `apps/worker` — Background job processor, deployed as a separate Fly machine
-     - `packages/shared` — Shared TypeScript types; changes here affect both apps -->
-
-_Single deployable unit — not yet documented._
+- Single deployable unit: Go HTTP server (`backend/`) serves both the REST API and the frontend static files.
+- **Build**: `cd backend && go build -o cv-generator .`
+- **Run**: `FRONTEND_DIR=../frontend ./cv-generator` (default port 8080, override with `PORT` env var)
 
 ## Known technical debt
 

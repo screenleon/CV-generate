@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CV Generator</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>📄 CV Generator</h1>
+    <p class="subtitle">Fill in your information and download your CV instantly</p>
+  </header>
+
+  <main class="container">
+    <form id="cv-form" novalidate>
+
+      <!-- ── Template & Format ─────────────────────────────── -->
+      <section class="card">
+        <h2>Output Options</h2>
+        <div class="row">
+          <div class="field">
+            <label for="template">Template Style</label>
+            <select id="template" name="template">
+              <option value="simple">Simple (Modern Western)</option>
+              <option value="japan">Japan 履歴書 (Rirekisho - Basic CV)</option>
+              <option value="shokumu">Japan 職務経歴書 (Shokumu Keirekisho - Detailed Work History)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="format">File Format</label>
+            <select id="format" name="format">
+              <option value="pdf">PDF</option>
+              <option value="word">Word (.docx)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Personal Information ───────────────────────────── -->
+      <section class="card">
+        <h2>Personal Information</h2>
+        <div class="row">
+          <div class="field required">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" placeholder="e.g. Tanaka Yuki / John Smith" required />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone" placeholder="+81-90-1234-5678" />
+          </div>
+          <div class="field">
+            <label for="address">Address</label>
+            <input type="text" id="address" name="address" placeholder="Tokyo, Japan" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="website">Website / LinkedIn</label>
+            <input type="url" id="website" name="website" placeholder="https://linkedin.com/in/you" />
+          </div>
+        </div>
+
+        <!-- Japan-specific fields (shown only for Japan template) -->
+        <div id="japan-fields" class="japan-only hidden">
+          <div class="row">
+            <div class="field">
+              <label for="birth_date">Date of Birth <span class="ja">生年月日</span></label>
+              <input type="text" id="birth_date" name="birth_date" placeholder="1990-04-01" />
+            </div>
+            <div class="field">
+              <label for="gender">Gender <span class="ja">性別</span></label>
+              <select id="gender" name="gender">
+                <option value="">— Select —</option>
+                <option value="Male">Male / 男性</option>
+                <option value="Female">Female / 女性</option>
+                <option value="Other">Other / その他</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="nationality">Nationality <span class="ja">国籍</span></label>
+              <input type="text" id="nationality" name="nationality" placeholder="Japanese / American" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Summary ───────────────────────────────────────── -->
+      <section class="card">
+        <h2>Professional Summary <span class="ja japan-only hidden">/ 自己PR</span></h2>
+        <div class="field">
+          <textarea id="summary" name="summary" rows="4"
+            placeholder="Brief overview of your background, goals, and key strengths…"></textarea>
+        </div>
+      </section>
+
+      <!-- ── Work Experience ───────────────────────────────── -->
+      <section class="card">
+        <h2>Work Experience</h2>
+        <div id="experience-list"></div>
+        <button type="button" class="btn-add" id="add-experience">＋ Add Experience</button>
+      </section>
+
+      <!-- ── Education ─────────────────────────────────────── -->
+      <section class="card">
+        <h2>Education</h2>
+        <div id="education-list"></div>
+        <button type="button" class="btn-add" id="add-education">＋ Add Education</button>
+      </section>
+
+      <!-- ── Skills ────────────────────────────────────────── -->
+      <section class="card">
+        <h2>Skills</h2>
+        <div class="field">
+          <label for="skills">Skills <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="skills" name="skills"
+            placeholder="Go, Python, Project Management, Agile" />
+        </div>
+      </section>
+
+      <!-- ── Tech Stack (for 職務経歴書 template) ─────────────── -->
+      <section class="card shokumu-only hidden" id="tech-stack-section">
+        <h2>Tech Stack / スキル一覧 <span class="hint">(for 職務経歴書 template)</span></h2>
+        <div class="field">
+          <label for="tech_languages">Programming Languages / 言語 <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_languages" name="tech_languages"
+            placeholder="Java, Go, TypeScript, Python" />
+        </div>
+        <div class="field">
+          <label for="tech_frameworks">Frameworks / FW <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_frameworks" name="tech_frameworks"
+            placeholder="Spring Boot, React, Vue.js" />
+        </div>
+        <div class="field">
+          <label for="tech_databases">Databases / DB <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_databases" name="tech_databases"
+            placeholder="PostgreSQL, MongoDB, Redis" />
+        </div>
+        <div class="field">
+          <label for="tech_infrastructure">Infrastructure / インフラ <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_infrastructure" name="tech_infrastructure"
+            placeholder="AWS, Docker, Kubernetes, Terraform" />
+        </div>
+        <div class="field">
+          <label for="tech_tools">Tools / ツール <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_tools" name="tech_tools"
+            placeholder="Git, Jenkins, JIRA, Slack" />
+        </div>
+      </section>
+
+      <!-- ── Languages ─────────────────────────────────────── -->
+      <section class="card">
+        <h2>Languages</h2>
+        <div id="language-list"></div>
+        <button type="button" class="btn-add" id="add-language">＋ Add Language</button>
+      </section>
+
+      <!-- ── Submit ─────────────────────────────────────────── -->
+      <div class="submit-row">
+        <button type="submit" class="btn-generate" id="generate-btn">
+          <span id="btn-label">Generate CV</span>
+          <span id="btn-spinner" class="spinner hidden"></span>
+        </button>
+      </div>
+
+      <div id="error-msg" class="error-msg hidden"></div>
+
+    </form>
+  </main>
+
+  <!-- ── Templates for dynamic items ─────────────────────── -->
+  <template id="tpl-experience">
+    <div class="item-block" data-type="experience">
+      <div class="item-header">
+        <span class="item-title">Experience</span>
+        <button type="button" class="btn-remove" title="Remove">✕</button>
+      </div>
+      <div class="row">
+        <div class="field"><label>Position / Role</label>
+          <input type="text" name="position" placeholder="Software Engineer" />
+        </div>
+        <div class="field"><label>Company</label>
+          <input type="text" name="company" placeholder="Acme Corp" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Start Date</label>
+          <input type="text" name="start_date" placeholder="2020-04" />
+        </div>
+        <div class="field"><label>End Date <span class="hint">(leave blank for "Present")</span></label>
+          <input type="text" name="end_date" placeholder="2023-03" />
+        </div>
+      </div>
+      <div class="field"><label>Description</label>
+        <textarea name="description" rows="2"
+          placeholder="Key responsibilities and achievements…"></textarea>
+      </div>
+      <!-- Shokumu-specific fields -->
+      <div class="shokumu-fields hidden">
+        <div class="field"><label>Project Name / 案件 <span class="hint">(for 職務経歴書)</span></label>
+          <input type="text" name="project" placeholder="E-commerce Platform Development" />
+        </div>
+        <div class="field"><label>Detailed Role / 担当業務 <span class="hint">(for 職務経歴書)</span></label>
+          <textarea name="role" rows="2"
+            placeholder="API design and implementation, Database optimization…"></textarea>
+        </div>
+        <div class="field"><label>Tech Stack / 技術 <span class="hint">(comma-separated, for 職務経歴書)</span></label>
+          <input type="text" name="tech_stack" placeholder="Java, Spring Boot, PostgreSQL, AWS" />
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-education">
+    <div class="item-block" data-type="education">
+      <div class="item-header">
+        <span class="item-title">Education</span>
+        <button type="button" class="btn-remove" title="Remove">✕</button>
+      </div>
+      <div class="row">
+        <div class="field"><label>Institution</label>
+          <input type="text" name="institution" placeholder="University of Tokyo" />
+        </div>
+        <div class="field"><label>Degree</label>
+          <input type="text" name="degree" placeholder="Bachelor of Science" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Field of Study</label>
+          <input type="text" name="field" placeholder="Computer Science" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Start Date</label>
+          <input type="text" name="start_date" placeholder="2016-04" />
+        </div>
+        <div class="field"><label>End Date</label>
+          <input type="text" name="end_date" placeholder="2020-03" />
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-language">
+    <div class="item-block" data-type="language">
+      <div class="item-header">
+        <span class="item-title">Language</span>
+        <button type="button" class="btn-remove" title="Remove">✕</button>
+      </div>
+      <div class="row">
+        <div class="field"><label>Language</label>
+          <input type="text" name="lang_name" placeholder="Japanese" />
+        </div>
+        <div class="field"><label>Proficiency</label>
+          <select name="proficiency">
+            <option value="">— Select —</option>
+            <option value="Native">Native / 母国語</option>
+            <option value="Business">Business / ビジネスレベル</option>
+            <option value="Conversational">Conversational / 日常会話</option>
+            <option value="Basic">Basic / 基礎</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,8 +1,121 @@
-# Agent Playbook Template
+# CV Generator
 
-## 30-Second TL;DR
+A Go-powered CV generator with a multi-template web frontend. Fill in your details, choose a style, and download a polished PDF or Word document in seconds.
 
-This repository gives your team a reusable AI delivery workflow: clear agent roles, stable operating rules, reusable skills, and decision logging.
+## Features
+
+- **Three template styles**
+  - **Simple** — clean modern layout for Western CVs
+  - **Japan 履歴書 (Rirekisho)** — structured grid layout following the Japanese Rirekisho format (basic CV with personal info, work history, education); includes Japan-specific fields (birth date, gender, nationality)
+  - **Japan 職務経歴書 (Shokumu Keirekisho)** — detailed professional resume for engineers; emphasizes project details, technical skills categorization, and work contributions
+- **Two output formats**: PDF and Word (.docx)
+- **Sections**: personal info, professional summary, work experience (with optional detailed project/role/tech stack for 職務経歴書), education, skills (simple or categorized), and languages
+- **Go backend** — single stateless binary, no database required
+- **Vanilla JS frontend** — no build step, served directly by the Go server
+
+## Quick Start
+
+### Prerequisites
+
+- **Go 1.21+**
+- **Chromium** (for PDF generation) — `chromium` or `google-chrome` must be on `PATH`
+- **Noto Sans CJK** fonts (for Japanese/Chinese/Korean characters in PDFs)
+
+On Debian/Ubuntu:
+
+```bash
+sudo apt-get install -y chromium fonts-noto-cjk
+```
+
+```bash
+# 1. Build the server
+cd backend
+go build -o cv-generator .
+
+# 2. Run the server (serves frontend automatically)
+FRONTEND_DIR=../frontend ./cv-generator
+# Server starts on http://localhost:8080
+
+# Override port:
+PORT=3000 FRONTEND_DIR=../frontend ./cv-generator
+```
+
+Open **http://localhost:8080** in your browser.
+
+> **Container / CI note**: set `CHROMEDP_NO_SANDBOX=1` when running as root (e.g., inside Docker) so Chromium can start without a user namespace sandbox.
+
+## Development (no build step needed)
+
+```bash
+cd backend
+FRONTEND_DIR=../frontend go run .
+```
+
+## Running Tests
+
+```bash
+cd backend
+CHROMEDP_NO_SANDBOX=1 go test ./...
+```
+
+## API
+
+`POST /api/generate`
+
+**Request body** (JSON):
+
+```json
+{
+  "name":        "Tanaka Yuki",
+  "email":       "yuki@example.com",
+  "phone":       "+81-90-1234-5678",
+  "address":     "Tokyo, Japan",
+  "website":     "https://example.com",
+  "birth_date":  "1990-04-01",
+  "gender":      "Female",
+  "nationality": "Japanese",
+  "summary":     "Senior Go engineer…",
+  "experience":  [{
+    "company": "Acme",
+    "position": "Engineer",
+    "start_date": "2020-01",
+    "end_date": "",
+    "description": "…",
+    "project": "E-commerce Platform",           // Optional, for 職務経歴書
+    "role": "Backend API design…",             // Optional, for 職務経歴書
+    "tech_stack": ["Go", "PostgreSQL", "AWS"]  // Optional, for 職務経歴書
+  }],
+  "education":   [{ "institution": "Univ of Tokyo", "degree": "B.Eng", "field": "CS", "start_date": "2014-04", "end_date": "2018-03" }],
+  "skills":      ["Go", "Docker", "SQL"],
+  "tech_stack": {                              // Optional, for 職務経歴書
+    "languages": ["Java", "Go", "TypeScript"],
+    "frameworks": ["Spring Boot", "React"],
+    "databases": ["PostgreSQL", "MongoDB"],
+    "infrastructure": ["AWS", "Docker", "Kubernetes"],
+    "tools": ["Git", "Jenkins", "JIRA"]
+  },
+  "languages":   [{ "name": "Japanese", "proficiency": "Native" }],
+  "template":    "simple",
+  "format":      "pdf"
+}
+```
+
+**Response**: binary file download (`cv.pdf` or `cv.docx`)
+
+| Field | Values |
+|-------|--------|
+| `template` | `"simple"` (default) · `"japan"` (履歴書) · `"shokumu"` (職務経歴書) |
+| `format` | `"pdf"` (default) · `"word"` / `"docx"` |
+
+### Template Comparison
+
+| Template | Use Case | Key Features |
+|----------|----------|--------------|
+| **Simple** | Western-style CV | Modern two-column layout, section separators |
+| **Japan 履歴書** | Japanese basic CV (Rirekisho) | Formal grid tables, Japan-specific personal fields (birth date, gender, nationality) |
+| **Japan 職務経歴書** | Japanese detailed work history (Shokumu Keirekisho) | Emphasized work experience with project details, tech stack per job, categorized technical skills |
+
+---
 
 Start here in order:
 0. `docs/rules-quickstart.md` (minimal rule load)
