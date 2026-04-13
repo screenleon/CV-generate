@@ -45,7 +45,7 @@ server from the `frontend/` directory.
 
 | Service | Purpose | Notes |
 |---------|---------|-------|
-| `github.com/go-pdf/fpdf` | PDF generation | Pure-Go library, no external dependencies |
+| `github.com/chromedp/chromedp` | PDF generation | Headless Chromium; renders HTML/CSS templates → full CJK/Unicode support |
 | None (stdlib `archive/zip`) | DOCX generation | DOCX is a ZIP+XML format built with Go stdlib |
 
 ## Deployment units

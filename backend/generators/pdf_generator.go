@@ -2,579 +2,640 @@ package generators
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"html/template"
 	"strings"
+	"time"
 
-	"github.com/go-pdf/fpdf"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 	"github.com/screenleon/cv-generate/models"
 )
 
 // GeneratePDF generates a PDF CV using the specified template style.
+// It renders an HTML page via a headless Chromium browser so that
+// CJK characters (Japanese, Chinese, Korean) display correctly.
 // Returns the PDF bytes or an error.
 func GeneratePDF(data *models.CVData) ([]byte, error) {
+	var htmlContent string
+	var err error
 	switch strings.ToLower(data.Template) {
 	case "japan":
-		return generateJapanPDF(data)
+		htmlContent, err = renderJapanHTML(data)
 	case "shokumu":
-		return generateShokumuPDF(data)
+		htmlContent, err = renderShokumuHTML(data)
 	default:
-		return generateSimplePDF(data)
+		htmlContent, err = renderSimpleHTML(data)
 	}
+	if err != nil {
+		return nil, fmt.Errorf("render HTML: %w", err)
+	}
+	return htmlToPDF(htmlContent)
 }
+
+// htmlToPDF uses headless Chromium to print an HTML string to a PDF byte slice.
+func htmlToPDF(htmlContent string) ([]byte, error) {
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("headless", true),
+	)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer cancelAlloc()
+
+	ctx, cancelCtx := chromedp.NewContext(allocCtx)
+	defer cancelCtx()
+
+	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
+	defer cancelTimeout()
+
+	// Use a data URI so no file system access is needed.
+	dataURI := "data:text/html;charset=utf-8," + urlEncode(htmlContent)
+
+	var pdfBuf []byte
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(dataURI),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			pdfBuf, _, err = page.PrintToPDF().
+				WithPrintBackground(true).
+				WithPaperWidth(8.27).   // A4 width in inches
+				WithPaperHeight(11.69). // A4 height in inches
+				WithMarginTop(0.6).
+				WithMarginBottom(0.6).
+				WithMarginLeft(0.6).
+				WithMarginRight(0.6).
+				Do(ctx)
+			return err
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("chromedp PrintToPDF: %w", err)
+	}
+	return pdfBuf, nil
+}
+
+// urlEncode percent-encodes an HTML string for use in a data URI.
+// Only characters unsafe in a URI are escaped.
+func urlEncode(s string) string {
+	var buf bytes.Buffer
+	for _, b := range []byte(s) {
+		if isURLSafe(b) {
+			buf.WriteByte(b)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", b)
+		}
+	}
+	return buf.String()
+}
+
+func isURLSafe(b byte) bool {
+	return (b >= 'A' && b <= 'Z') ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= '0' && b <= '9') ||
+		b == '-' || b == '_' || b == '.' || b == '~' ||
+		b == '!' || b == '\'' || b == '(' || b == ')' || b == '*' ||
+		b == '/' || b == ':' || b == '@' || b == ',' || b == ';' ||
+		b == '+' || b == '=' || b == '?' || b == '#'
+}
+
+// -------------------------------------------------------------------
+// Shared CSS and font stack
+// -------------------------------------------------------------------
+
+const sharedCSS = `
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans CJK JP', 'Noto Sans JP', 'IPAGothic',
+                 'Hiragino Sans', 'Meiryo', 'Yu Gothic', sans-serif;
+    font-size: 10pt;
+    color: #222;
+    line-height: 1.5;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 4px 8px; border: 1px solid #ccc; vertical-align: top; }
+  @media print {
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+`
 
 // -------------------------------------------------------------------
 // Simple template
 // -------------------------------------------------------------------
 
-func generateSimplePDF(data *models.CVData) ([]byte, error) {
-	pdf := fpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(20, 20, 20)
-	pdf.AddPage()
+const simpleTmplSrc = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+` + sharedCSS + `
+  .header { background: #28508A; color: #fff; padding: 18px 24px 14px; }
+  .header h1 { font-size: 22pt; font-weight: bold; margin-bottom: 4px; }
+  .header .contact { font-size: 9pt; opacity: 0.9; }
+  .body { padding: 16px 24px; }
+  .section-title {
+    font-size: 10.5pt; font-weight: bold; color: #28508A;
+    border-bottom: 2px solid #28508A; margin: 14px 0 6px;
+    padding-bottom: 2px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .summary { font-size: 10pt; }
+  .exp-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .exp-company { font-weight: bold; font-size: 10.5pt; }
+  .exp-date { font-size: 9pt; color: #666; white-space: nowrap; }
+  .exp-position { font-style: italic; font-size: 10pt; color: #28508A; }
+  .exp-desc { font-size: 9.5pt; color: #444; margin-top: 2px; }
+  .exp-entry { margin-bottom: 10px; }
+  .edu-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .edu-inst { font-weight: bold; font-size: 10pt; }
+  .edu-date { font-size: 9pt; color: #666; }
+  .edu-degree { font-size: 9.5pt; color: #555; }
+  .edu-entry { margin-bottom: 8px; }
+  .skills { font-size: 10pt; }
+  .lang-entry { display: inline-block; margin-right: 18px; margin-bottom: 4px; font-size: 10pt; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>{{.Name}}</h1>
+  {{if .Contact}}<div class="contact">{{.Contact}}</div>{{end}}
+</div>
+<div class="body">
+  {{if .Summary}}
+  <div class="section-title">Summary</div>
+  <div class="summary">{{.Summary}}</div>
+  {{end}}
+  {{if .Experience}}
+  <div class="section-title">Experience</div>
+  {{range .Experience}}
+  <div class="exp-entry">
+    <div class="exp-row">
+      <span class="exp-company">{{.Company}}</span>
+      <span class="exp-date">{{.StartDate}} – {{.EndDate}}</span>
+    </div>
+    <div class="exp-position">{{.Position}}</div>
+    {{if .Description}}<div class="exp-desc">{{.Description}}</div>{{end}}
+  </div>
+  {{end}}
+  {{end}}
+  {{if .Education}}
+  <div class="section-title">Education</div>
+  {{range .Education}}
+  <div class="edu-entry">
+    <div class="edu-row">
+      <span class="edu-inst">{{.Institution}}</span>
+      <span class="edu-date">{{.StartDate}} – {{.EndDate}}</span>
+    </div>
+    <div class="edu-degree">{{.Degree}}{{if .Field}} – {{.Field}}{{end}}</div>
+  </div>
+  {{end}}
+  {{end}}
+  {{if .Skills}}
+  <div class="section-title">Skills</div>
+  <div class="skills">{{.SkillsLine}}</div>
+  {{end}}
+  {{if .Languages}}
+  <div class="section-title">Languages</div>
+  {{range .Languages}}
+  <div class="lang-entry">{{.Name}}{{if .Proficiency}} – {{.Proficiency}}{{end}}</div>
+  {{end}}
+  {{end}}
+</div>
+</body>
+</html>`
 
-	// --- Header: Name ---
-	pdf.SetFont("Helvetica", "B", 24)
-	pdf.SetTextColor(30, 30, 30)
-	pdf.CellFormat(0, 12, data.Name, "", 1, "C", false, 0, "")
-
-	// --- Contact line ---
-	contactParts := []string{}
-	if data.Email != "" {
-		contactParts = append(contactParts, data.Email)
-	}
-	if data.Phone != "" {
-		contactParts = append(contactParts, data.Phone)
-	}
-	if data.Address != "" {
-		contactParts = append(contactParts, data.Address)
-	}
-	if data.Website != "" {
-		contactParts = append(contactParts, data.Website)
-	}
-	if len(contactParts) > 0 {
-		pdf.SetFont("Helvetica", "", 9)
-		pdf.SetTextColor(80, 80, 80)
-		pdf.CellFormat(0, 6, strings.Join(contactParts, "  |  "), "", 1, "C", false, 0, "")
-	}
-
-	// Divider line
-	pdf.SetDrawColor(60, 120, 200)
-	pdf.SetLineWidth(0.8)
-	pdf.Line(20, pdf.GetY()+3, 190, pdf.GetY()+3)
-	pdf.Ln(7)
-
-	// --- Summary ---
-	if data.Summary != "" {
-		addSimpleSection(pdf, "SUMMARY")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(50, 50, 50)
-		pdf.MultiCell(0, 5, data.Summary, "", "L", false)
-		pdf.Ln(4)
-	}
-
-	// --- Experience ---
-	if len(data.Experience) > 0 {
-		addSimpleSection(pdf, "EXPERIENCE")
-		for _, exp := range data.Experience {
-			endDate := exp.EndDate
-			if endDate == "" {
-				endDate = "Present"
-			}
-			pdf.SetFont("Helvetica", "B", 11)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.CellFormat(130, 6, exp.Position, "", 0, "L", false, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(100, 100, 100)
-			pdf.CellFormat(0, 6, exp.StartDate+" – "+endDate, "", 1, "R", false, 0, "")
-
-			pdf.SetFont("Helvetica", "I", 10)
-			pdf.SetTextColor(60, 60, 60)
-			pdf.CellFormat(0, 5, exp.Company, "", 1, "L", false, 0, "")
-
-			if exp.Description != "" {
-				pdf.SetFont("Helvetica", "", 10)
-				pdf.SetTextColor(50, 50, 50)
-				pdf.MultiCell(0, 5, exp.Description, "", "L", false)
-			}
-			pdf.Ln(3)
-		}
-	}
-
-	// --- Education ---
-	if len(data.Education) > 0 {
-		addSimpleSection(pdf, "EDUCATION")
-		for _, edu := range data.Education {
-			pdf.SetFont("Helvetica", "B", 11)
-			pdf.SetTextColor(30, 30, 30)
-			degree := edu.Degree
-			if edu.Field != "" {
-				degree += " – " + edu.Field
-			}
-			pdf.CellFormat(130, 6, degree, "", 0, "L", false, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(100, 100, 100)
-			pdf.CellFormat(0, 6, edu.StartDate+" – "+edu.EndDate, "", 1, "R", false, 0, "")
-
-			pdf.SetFont("Helvetica", "I", 10)
-			pdf.SetTextColor(60, 60, 60)
-			pdf.CellFormat(0, 5, edu.Institution, "", 1, "L", false, 0, "")
-			pdf.Ln(3)
-		}
-	}
-
-	// --- Skills ---
-	if len(data.Skills) > 0 {
-		addSimpleSection(pdf, "SKILLS")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(50, 50, 50)
-		pdf.MultiCell(0, 5, strings.Join(data.Skills, "  •  "), "", "L", false)
-		pdf.Ln(4)
-	}
-
-	// --- Languages ---
-	if len(data.Languages) > 0 {
-		addSimpleSection(pdf, "LANGUAGES")
-		for _, lang := range data.Languages {
-			label := lang.Name
-			if lang.Proficiency != "" {
-				label += " – " + lang.Proficiency
-			}
-			pdf.SetFont("Helvetica", "", 10)
-			pdf.SetTextColor(50, 50, 50)
-			pdf.CellFormat(0, 5, label, "", 1, "L", false, 0, "")
-		}
-		pdf.Ln(2)
-	}
-
-	return pdfToBytes(pdf)
+type simpleHTMLData struct {
+	Name       string
+	Contact    string
+	Summary    string
+	Experience []expHTMLView
+	Education  []models.Education
+	Skills     []string
+	SkillsLine string
+	Languages  []models.Language
 }
 
-func addSimpleSection(pdf *fpdf.Fpdf, title string) {
-	pdf.SetFont("Helvetica", "B", 12)
-	pdf.SetTextColor(60, 120, 200)
-	pdf.CellFormat(0, 7, title, "", 1, "L", false, 0, "")
-	pdf.SetDrawColor(60, 120, 200)
-	pdf.SetLineWidth(0.3)
-	pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
-	pdf.Ln(3)
+type expHTMLView struct {
+	Company     string
+	Position    string
+	StartDate   string
+	EndDate     string
+	Description string
+}
+
+func renderSimpleHTML(data *models.CVData) (string, error) {
+	parts := []string{}
+	if data.Email != "" {
+		parts = append(parts, data.Email)
+	}
+	if data.Phone != "" {
+		parts = append(parts, data.Phone)
+	}
+	if data.Address != "" {
+		parts = append(parts, data.Address)
+	}
+	if data.Website != "" {
+		parts = append(parts, data.Website)
+	}
+
+	exps := make([]expHTMLView, len(data.Experience))
+	for i, e := range data.Experience {
+		end := e.EndDate
+		if end == "" {
+			end = "Present"
+		}
+		exps[i] = expHTMLView{
+			Company:     e.Company,
+			Position:    e.Position,
+			StartDate:   e.StartDate,
+			EndDate:     end,
+			Description: e.Description,
+		}
+	}
+
+	td := simpleHTMLData{
+		Name:       data.Name,
+		Contact:    strings.Join(parts, "  |  "),
+		Summary:    data.Summary,
+		Experience: exps,
+		Education:  data.Education,
+		Skills:     data.Skills,
+		SkillsLine: strings.Join(data.Skills, "  •  "),
+		Languages:  data.Languages,
+	}
+
+	tmpl, err := template.New("simple").Parse(simpleTmplSrc)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, td); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 // -------------------------------------------------------------------
 // Japan (履歴書) template
 // -------------------------------------------------------------------
 
-func generateJapanPDF(data *models.CVData) ([]byte, error) {
-	pdf := fpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(15, 15, 15)
-	pdf.AddPage()
+const japanTmplSrc = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+` + sharedCSS + `
+  .title { text-align: center; font-size: 18pt; font-weight: bold; margin: 10px 0; color: #222; }
+  .section-header {
+    background: #28508A; color: #fff; font-weight: bold;
+    font-size: 11pt; padding: 4px 10px; margin: 12px 0 4px;
+  }
+  .info-table td.label {
+    background: #EEF2FB; color: #28508A; font-weight: bold;
+    width: 160px; white-space: nowrap;
+  }
+  .info-table td.value { background: #fff; }
+  .pr-box { border: 1px solid #ccc; padding: 8px; font-size: 10pt; min-height: 40px; }
+  .col-date { width: 120px; text-align: center; background: #DCE6F5; font-weight: bold; }
+  .col-inst { background: #DCE6F5; font-weight: bold; }
+  .col-company { width: 160px; background: #DCE6F5; font-weight: bold; }
+  .col-role { background: #DCE6F5; font-weight: bold; }
+  .desc-row td { font-size: 9pt; color: #555; font-style: italic; }
+  .skills-box { border: 1px solid #ccc; padding: 8px; font-size: 10pt; }
+  .lang-item { display: inline-block; margin-right: 16px; font-size: 10pt; }
+</style>
+</head>
+<body>
+<div class="title">履歴書 / Curriculum Vitae</div>
 
-	pageW := 180.0 // usable width (210 - 30 margins)
+<div class="section-header">個人情報 / Personal Information</div>
+<table class="info-table">
+  <tr><td class="label">氏名 / Name</td><td class="value">{{.Name}}</td></tr>
+  {{if .BirthDate}}<tr><td class="label">生年月日 / Date of Birth</td><td class="value">{{.BirthDate}}</td></tr>{{end}}
+  {{if .Gender}}<tr><td class="label">性別 / Gender</td><td class="value">{{.Gender}}</td></tr>{{end}}
+  {{if .Nationality}}<tr><td class="label">国籍 / Nationality</td><td class="value">{{.Nationality}}</td></tr>{{end}}
+  {{if .Address}}<tr><td class="label">住所 / Address</td><td class="value">{{.Address}}</td></tr>{{end}}
+  {{if .Phone}}<tr><td class="label">電話 / Phone</td><td class="value">{{.Phone}}</td></tr>{{end}}
+  {{if .Email}}<tr><td class="label">メール / Email</td><td class="value">{{.Email}}</td></tr>{{end}}
+  {{if .Website}}<tr><td class="label">Website</td><td class="value">{{.Website}}</td></tr>{{end}}
+</table>
 
-	// ---- Title ----
-	pdf.SetFont("Helvetica", "B", 16)
-	pdf.SetTextColor(20, 20, 20)
-	pdf.CellFormat(0, 10, "履歴書 / Curriculum Vitae", "", 1, "C", false, 0, "")
-	pdf.Ln(2)
+{{if .Summary}}
+<div class="section-header">自己PR / Self PR</div>
+<div class="pr-box">{{.Summary}}</div>
+{{end}}
 
-	// ---- Personal information box ----
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFillColor(40, 80, 160)
-	pdf.CellFormat(0, 7, "  Personal Information / 個人情報", "", 1, "L", true, 0, "")
-	pdf.Ln(1)
+{{if .Education}}
+<div class="section-header">学歴 / Education</div>
+<table>
+  <tr><th class="col-date">期間 / Period</th><th class="col-inst">学校名・学位 / Institution &amp; Degree</th></tr>
+  {{range .Education}}
+  <tr>
+    <td style="text-align:center">{{.StartDate}} – {{.EndDate}}</td>
+    <td>{{.Institution}}{{if .Degree}} ({{.Degree}}{{if .Field}} – {{.Field}}{{end}}){{end}}</td>
+  </tr>
+  {{end}}
+</table>
+{{end}}
 
-	addJapanField(pdf, pageW, "Name / 氏名", data.Name)
-	if data.BirthDate != "" {
-		addJapanField(pdf, pageW, "Date of Birth / 生年月日", data.BirthDate)
-	}
-	if data.Gender != "" {
-		addJapanField(pdf, pageW, "Gender / 性別", data.Gender)
-	}
-	if data.Nationality != "" {
-		addJapanField(pdf, pageW, "Nationality / 国籍", data.Nationality)
-	}
-	addJapanField(pdf, pageW, "Address / 住所", data.Address)
-	addJapanField(pdf, pageW, "Phone / 電話", data.Phone)
-	addJapanField(pdf, pageW, "Email / メール", data.Email)
-	if data.Website != "" {
-		addJapanField(pdf, pageW, "Website", data.Website)
-	}
-	pdf.Ln(4)
+{{if .Experience}}
+<div class="section-header">職歴 / Work Experience</div>
+<table>
+  <tr>
+    <th class="col-date">期間 / Period</th>
+    <th class="col-company">会社名 / Company</th>
+    <th class="col-role">役職 / Position</th>
+  </tr>
+  {{range .Experience}}
+  <tr>
+    <td style="text-align:center">{{.StartDate}} – {{.EndDate}}</td>
+    <td>{{.Company}}</td>
+    <td>{{.Position}}</td>
+  </tr>
+  {{if .Description}}
+  <tr class="desc-row"><td colspan="3" style="padding-left:24px">{{.Description}}</td></tr>
+  {{end}}
+  {{end}}
+</table>
+{{end}}
 
-	// ---- Summary / Motivation ----
-	if data.Summary != "" {
-		addJapanSectionHeader(pdf, "Self PR / 自己PR")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(40, 40, 40)
-		pdf.MultiCell(0, 5, data.Summary, "1", "L", false)
-		pdf.Ln(4)
-	}
+{{if .Skills}}
+<div class="section-header">スキル / Skills</div>
+<div class="skills-box">{{.SkillsLine}}</div>
+{{end}}
 
-	// ---- Education ----
-	if len(data.Education) > 0 {
-		addJapanSectionHeader(pdf, "Education / 学歴")
-		pdf.SetFont("Helvetica", "B", 9)
-		pdf.SetFillColor(220, 230, 245)
-		pdf.SetTextColor(30, 30, 30)
-		colDate := 35.0
-		colRest := pageW - colDate
-		pdf.CellFormat(colDate, 6, "Period / 期間", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(colRest, 6, "Institution / 学校名", "1", 1, "C", true, 0, "")
-		pdf.SetFont("Helvetica", "", 9)
-		pdf.SetFillColor(255, 255, 255)
-		for _, edu := range data.Education {
-			period := edu.StartDate + " – " + edu.EndDate
-			institution := edu.Institution
-			if edu.Degree != "" {
-				institution += " (" + edu.Degree
-				if edu.Field != "" {
-					institution += " – " + edu.Field
-				}
-				institution += ")"
-			}
-			pdf.CellFormat(colDate, 6, period, "1", 0, "C", false, 0, "")
-			pdf.CellFormat(colRest, 6, institution, "1", 1, "L", false, 0, "")
+{{if .Languages}}
+<div class="section-header">語学 / Languages</div>
+<div style="padding: 6px 0">
+  {{range .Languages}}<span class="lang-item">• {{.Name}}{{if .Proficiency}} ({{.Proficiency}}){{end}}</span>{{end}}
+</div>
+{{end}}
+</body>
+</html>`
+
+type japanHTMLData struct {
+	Name        string
+	BirthDate   string
+	Gender      string
+	Nationality string
+	Address     string
+	Phone       string
+	Email       string
+	Website     string
+	Summary     string
+	Experience  []expHTMLView
+	Education   []models.Education
+	Skills      []string
+	SkillsLine  string
+	Languages   []models.Language
+}
+
+func renderJapanHTML(data *models.CVData) (string, error) {
+	exps := make([]expHTMLView, len(data.Experience))
+	for i, e := range data.Experience {
+		end := e.EndDate
+		if end == "" {
+			end = "現在"
 		}
-		pdf.Ln(4)
-	}
-
-	// ---- Experience ----
-	if len(data.Experience) > 0 {
-		addJapanSectionHeader(pdf, "Work Experience / 職歴")
-		pdf.SetFont("Helvetica", "B", 9)
-		pdf.SetFillColor(220, 230, 245)
-		pdf.SetTextColor(30, 30, 30)
-		colDate := 35.0
-		colCompany := 50.0
-		colRole := pageW - colDate - colCompany
-		pdf.CellFormat(colDate, 6, "Period / 期間", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(colCompany, 6, "Company / 会社名", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(colRole, 6, "Position / 役職", "1", 1, "C", true, 0, "")
-		pdf.SetFont("Helvetica", "", 9)
-		pdf.SetFillColor(255, 255, 255)
-		for _, exp := range data.Experience {
-			endDate := exp.EndDate
-			if endDate == "" {
-				endDate = "Present"
-			}
-			period := exp.StartDate + " – " + endDate
-			pdf.CellFormat(colDate, 6, period, "1", 0, "C", false, 0, "")
-			pdf.CellFormat(colCompany, 6, exp.Company, "1", 0, "L", false, 0, "")
-			pdf.CellFormat(colRole, 6, exp.Position, "1", 1, "L", false, 0, "")
-			if exp.Description != "" {
-				pdf.SetFont("Helvetica", "I", 8)
-				pdf.SetTextColor(80, 80, 80)
-				pdf.MultiCell(0, 4, "  "+exp.Description, "LR", "L", false)
-				pdf.SetFont("Helvetica", "", 9)
-				pdf.SetTextColor(30, 30, 30)
-				// close bottom border of description row
-				pdf.CellFormat(0, 0, "", "B", 1, "", false, 0, "")
-			}
-		}
-		pdf.Ln(4)
-	}
-
-	// ---- Skills ----
-	if len(data.Skills) > 0 {
-		addJapanSectionHeader(pdf, "Skills / スキル")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(40, 40, 40)
-		pdf.MultiCell(0, 5, strings.Join(data.Skills, "  /  "), "1", "L", false)
-		pdf.Ln(4)
-	}
-
-	// ---- Languages ----
-	if len(data.Languages) > 0 {
-		addJapanSectionHeader(pdf, "Languages / 語学")
-		for _, lang := range data.Languages {
-			label := lang.Name
-			if lang.Proficiency != "" {
-				label += fmt.Sprintf("  (%s)", lang.Proficiency)
-			}
-			pdf.SetFont("Helvetica", "", 10)
-			pdf.SetTextColor(40, 40, 40)
-			pdf.CellFormat(0, 5, "  • "+label, "", 1, "L", false, 0, "")
+		exps[i] = expHTMLView{
+			Company:     e.Company,
+			Position:    e.Position,
+			StartDate:   e.StartDate,
+			EndDate:     end,
+			Description: e.Description,
 		}
 	}
 
-	return pdfToBytes(pdf)
-}
-
-func addJapanSectionHeader(pdf *fpdf.Fpdf, title string) {
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFillColor(40, 80, 160)
-	pdf.CellFormat(0, 7, "  "+title, "", 1, "L", true, 0, "")
-	pdf.Ln(1)
-}
-
-func addJapanField(pdf *fpdf.Fpdf, pageW float64, label, value string) {
-	if value == "" {
-		return
+	td := japanHTMLData{
+		Name:        data.Name,
+		BirthDate:   data.BirthDate,
+		Gender:      data.Gender,
+		Nationality: data.Nationality,
+		Address:     data.Address,
+		Phone:       data.Phone,
+		Email:       data.Email,
+		Website:     data.Website,
+		Summary:     data.Summary,
+		Experience:  exps,
+		Education:   data.Education,
+		Skills:      data.Skills,
+		SkillsLine:  strings.Join(data.Skills, "  /  "),
+		Languages:   data.Languages,
 	}
-	labelW := 50.0
-	valueW := pageW - labelW
-	pdf.SetFont("Helvetica", "B", 9)
-	pdf.SetFillColor(240, 244, 252)
-	pdf.SetTextColor(40, 80, 160)
-	pdf.CellFormat(labelW, 6, "  "+label, "1", 0, "L", true, 0, "")
-	pdf.SetFont("Helvetica", "", 9)
-	pdf.SetFillColor(255, 255, 255)
-	pdf.SetTextColor(30, 30, 30)
-	pdf.CellFormat(valueW, 6, "  "+value, "1", 1, "L", false, 0, "")
-}
 
-// pdfToBytes converts the FPDF object to a byte slice.
-func pdfToBytes(pdf *fpdf.Fpdf) ([]byte, error) {
-	if err := pdf.Error(); err != nil {
-		return nil, err
+	tmpl, err := template.New("japan").Parse(japanTmplSrc)
+	if err != nil {
+		return "", err
 	}
 	var buf bytes.Buffer
-	if err := pdf.Output(&buf); err != nil {
-		return nil, err
+	if err := tmpl.Execute(&buf, td); err != nil {
+		return "", err
 	}
-	return buf.Bytes(), nil
+	return buf.String(), nil
 }
 
 // -------------------------------------------------------------------
-// Shokumu (職務経歴書) template - Detailed work history for engineers
+// Shokumu (職務経歴書) template
 // -------------------------------------------------------------------
 
-func generateShokumuPDF(data *models.CVData) ([]byte, error) {
-	pdf := fpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(15, 15, 15)
-	pdf.AddPage()
+const shokumuTmplSrc = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+` + sharedCSS + `
+  .title { text-align: center; font-size: 18pt; font-weight: bold; margin: 10px 0; color: #222; }
+  .section-header {
+    background: #28508A; color: #fff; font-weight: bold;
+    font-size: 11pt; padding: 4px 10px; margin: 14px 0 4px;
+  }
+  .info-table td.label {
+    background: #EEF2FB; color: #28508A; font-weight: bold;
+    width: 160px; white-space: nowrap;
+  }
+  .info-table td.value { background: #fff; }
+  .summary-box { border: 1px solid #ccc; padding: 8px; font-size: 10pt; min-height: 40px; }
+  .exp-company-header {
+    background: #EBF0FA; font-weight: bold; font-size: 10.5pt;
+    padding: 5px 10px; margin: 10px 0 0; border: 1px solid #c0cce8;
+  }
+  .exp-detail-table td.detail-label {
+    background: #EEF2FB; color: #28508A; font-weight: bold;
+    width: 130px; white-space: nowrap;
+  }
+  .exp-detail-table td.detail-value { background: #fff; }
+  .skills-table td.skill-label {
+    background: #EBF0FA; color: #28508A; font-weight: bold;
+    width: 150px; white-space: nowrap;
+  }
+  .skills-table td.skill-value { background: #fff; }
+  .edu-item { font-size: 10pt; margin: 3px 0; }
+  .lang-item { display: inline-block; margin-right: 16px; font-size: 10pt; }
+</style>
+</head>
+<body>
+<div class="title">職務経歴書 / Professional Resume</div>
 
-	pageW := 180.0 // usable width (210 - 30 margins)
+<div class="section-header">個人情報 / Personal Information</div>
+<table class="info-table">
+  <tr><td class="label">氏名 / Name</td><td class="value">{{.Name}}</td></tr>
+  {{if .Email}}<tr><td class="label">メール / Email</td><td class="value">{{.Email}}</td></tr>{{end}}
+  {{if .Phone}}<tr><td class="label">電話 / Phone</td><td class="value">{{.Phone}}</td></tr>{{end}}
+</table>
 
-	// ---- Title ----
-	pdf.SetFont("Helvetica", "B", 18)
-	pdf.SetTextColor(20, 20, 20)
-	pdf.CellFormat(0, 10, "職務経歴書 / Professional Resume", "", 1, "C", false, 0, "")
-	pdf.Ln(4)
+{{if .Summary}}
+<div class="section-header">職務概要 / Professional Summary</div>
+<div class="summary-box">{{.Summary}}</div>
+{{end}}
 
-	// ---- Personal Information (compact) ----
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFillColor(40, 80, 160)
-	pdf.CellFormat(0, 7, "  Personal Information / 個人情報", "", 1, "L", true, 0, "")
-	pdf.Ln(1)
+{{if .Experience}}
+<div class="section-header">職務経歴 / Work Experience</div>
+{{range $i, $exp := .Experience}}
+<div class="exp-company-header">【{{add $i 1}}】{{$exp.Company}}  （{{$exp.StartDate}} – {{$exp.EndDate}}）</div>
+<table class="exp-detail-table">
+  {{if $exp.Project}}<tr><td class="detail-label">案件 / Project</td><td class="detail-value">{{$exp.Project}}</td></tr>{{end}}
+  <tr><td class="detail-label">役職 / Position</td><td class="detail-value">{{$exp.Position}}</td></tr>
+  {{if $exp.Role}}<tr><td class="detail-label">担当業務 / Role</td><td class="detail-value">{{$exp.Role}}</td></tr>{{end}}
+  {{if $exp.Description}}<tr><td class="detail-label">詳細 / Details</td><td class="detail-value">{{$exp.Description}}</td></tr>{{end}}
+  {{if $exp.TechStackLine}}<tr><td class="detail-label">技術 / Tech Stack</td><td class="detail-value">{{$exp.TechStackLine}}</td></tr>{{end}}
+</table>
+{{end}}
+{{end}}
 
-	addJapanField(pdf, pageW, "Name / 氏名", data.Name)
-	addJapanField(pdf, pageW, "Email / メール", data.Email)
-	if data.Phone != "" {
-		addJapanField(pdf, pageW, "Phone / 電話", data.Phone)
-	}
-	pdf.Ln(4)
+{{if .HasTechStack}}
+<div class="section-header">スキル一覧 / Technical Skills</div>
+<table class="skills-table">
+  {{range .TechStackRows}}
+  <tr><td class="skill-label">{{.Label}}</td><td class="skill-value">{{.Value}}</td></tr>
+  {{end}}
+</table>
+{{else if .Skills}}
+<div class="section-header">スキル / Skills</div>
+<table class="skills-table">
+  <tr><td class="skill-value" colspan="2">{{.SkillsLine}}</td></tr>
+</table>
+{{end}}
 
-	// ---- Professional Summary / 職務概要 ----
-	if data.Summary != "" {
-		addShokumuSectionHeader(pdf, "Professional Summary / 職務概要")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(40, 40, 40)
-		pdf.MultiCell(0, 5, data.Summary, "1", "L", false)
-		pdf.Ln(4)
-	}
+{{if .Education}}
+<div class="section-header">学歴 / Education</div>
+{{range .Education}}
+<div class="edu-item">• {{.StartDate}} – {{.EndDate}}：{{.Institution}}{{if .Degree}} ({{.Degree}}{{if .Field}} – {{.Field}}{{end}}){{end}}</div>
+{{end}}
+{{end}}
 
-	// ---- Detailed Work History / 職務経歴 ----
-	if len(data.Experience) > 0 {
-		addShokumuSectionHeader(pdf, "Work Experience / 職務経歴")
+{{if .Languages}}
+<div class="section-header">語学 / Languages</div>
+<div style="padding: 6px 0">
+  {{range .Languages}}<span class="lang-item">• {{.Name}}{{if .Proficiency}} ({{.Proficiency}}){{end}}</span>{{end}}
+</div>
+{{end}}
+</body>
+</html>`
 
-		for idx, exp := range data.Experience {
-			// Company header with period
-			pdf.SetFont("Helvetica", "B", 11)
-			pdf.SetFillColor(235, 240, 250)
-			pdf.SetTextColor(30, 30, 30)
-			endDate := exp.EndDate
-			if endDate == "" {
-				endDate = "Present / 現在"
-			}
-			period := fmt.Sprintf("%s – %s", exp.StartDate, endDate)
+type shokumuHTMLData struct {
+	Name         string
+	Email        string
+	Phone        string
+	Summary      string
+	Experience   []shokumuExpHTMLView
+	Education    []models.Education
+	Skills       []string
+	SkillsLine   string
+	Languages    []models.Language
+	TechStackRows []labelValueHTML
+	HasTechStack bool
+}
 
-			pdf.CellFormat(0, 7, fmt.Sprintf("  【%d】 %s  (%s)", idx+1, exp.Company, period), "1", 1, "L", true, 0, "")
+type shokumuExpHTMLView struct {
+	Company       string
+	Position      string
+	StartDate     string
+	EndDate       string
+	Project       string
+	Role          string
+	Description   string
+	TechStackLine string
+}
 
-			// Project / Position
-			if exp.Project != "" {
-				pdf.SetFont("Helvetica", "B", 10)
-				pdf.SetTextColor(40, 80, 160)
-				pdf.SetFillColor(255, 255, 255)
-				pdf.CellFormat(40, 6, "  Project / 案件", "1", 0, "L", true, 0, "")
-				pdf.SetFont("Helvetica", "", 10)
-				pdf.SetTextColor(30, 30, 30)
-				pdf.CellFormat(pageW-40, 6, "  "+exp.Project, "1", 1, "L", false, 0, "")
-			}
+type labelValueHTML struct {
+	Label string
+	Value string
+}
 
-			// Position
-			pdf.SetFont("Helvetica", "B", 10)
-			pdf.SetTextColor(40, 80, 160)
-			pdf.SetFillColor(255, 255, 255)
-			pdf.CellFormat(40, 6, "  Position / 役職", "1", 0, "L", true, 0, "")
-			pdf.SetFont("Helvetica", "", 10)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.CellFormat(pageW-40, 6, "  "+exp.Position, "1", 1, "L", false, 0, "")
-
-			// Role / Responsibilities
-			if exp.Role != "" {
-				pdf.SetFont("Helvetica", "B", 10)
-				pdf.SetTextColor(40, 80, 160)
-				pdf.CellFormat(40, 6, "  Role / 担当業務", "1", 0, "L", true, 0, "")
-				pdf.SetFont("Helvetica", "", 9)
-				pdf.SetTextColor(30, 30, 30)
-
-				// MultiCell for role (may wrap)
-				x := pdf.GetX()
-				y := pdf.GetY()
-				pdf.SetXY(x, y)
-				pdf.MultiCell(pageW-40, 5, "  "+exp.Role, "1", "L", false)
-			}
-
-			// Description
-			if exp.Description != "" {
-				pdf.SetFont("Helvetica", "B", 10)
-				pdf.SetTextColor(40, 80, 160)
-				pdf.CellFormat(40, 6, "  Details / 詳細", "1", 0, "L", true, 0, "")
-				pdf.SetFont("Helvetica", "", 9)
-				pdf.SetTextColor(30, 30, 30)
-
-				x := pdf.GetX()
-				y := pdf.GetY()
-				pdf.SetXY(x, y)
-				pdf.MultiCell(pageW-40, 5, "  "+exp.Description, "1", "L", false)
-			}
-
-			// Tech Stack
-			if len(exp.TechStack) > 0 {
-				pdf.SetFont("Helvetica", "B", 10)
-				pdf.SetTextColor(40, 80, 160)
-				pdf.CellFormat(40, 6, "  Tech Stack / 技術", "1", 0, "L", true, 0, "")
-				pdf.SetFont("Helvetica", "", 9)
-				pdf.SetTextColor(30, 30, 30)
-				pdf.CellFormat(pageW-40, 6, "  "+strings.Join(exp.TechStack, ", "), "1", 1, "L", false, 0, "")
-			}
-
-			pdf.Ln(3)
+func renderShokumuHTML(data *models.CVData) (string, error) {
+	exps := make([]shokumuExpHTMLView, len(data.Experience))
+	for i, e := range data.Experience {
+		end := e.EndDate
+		if end == "" {
+			end = "現在"
+		}
+		techLine := ""
+		if len(e.TechStack) > 0 {
+			techLine = strings.Join(e.TechStack, ", ")
+		}
+		exps[i] = shokumuExpHTMLView{
+			Company:       e.Company,
+			Position:      e.Position,
+			StartDate:     e.StartDate,
+			EndDate:       end,
+			Project:       e.Project,
+			Role:          e.Role,
+			Description:   e.Description,
+			TechStackLine: techLine,
 		}
 	}
 
-	// ---- Technical Skills / スキル一覧 ----
-	if data.TechStack != nil && (len(data.TechStack.Languages) > 0 || len(data.TechStack.Frameworks) > 0 ||
-		len(data.TechStack.Databases) > 0 || len(data.TechStack.Infrastructure) > 0 || len(data.TechStack.Tools) > 0) {
-
-		addShokumuSectionHeader(pdf, "Technical Skills / スキル一覧")
-
-		// Build categorized skills table
-		pdf.SetFont("Helvetica", "B", 9)
-		pdf.SetFillColor(235, 240, 250)
-		pdf.SetTextColor(40, 80, 160)
-
-		labelW := 45.0
-		valueW := pageW - labelW
-
+	techStackRows := []labelValueHTML{}
+	hasTechStack := false
+	if data.TechStack != nil {
 		if len(data.TechStack.Languages) > 0 {
-			pdf.CellFormat(labelW, 6, "  Languages / 言語", "1", 0, "L", true, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.SetFillColor(255, 255, 255)
-			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Languages, ", "), "1", 1, "L", false, 0, "")
-			pdf.SetFont("Helvetica", "B", 9)
-			pdf.SetTextColor(40, 80, 160)
-			pdf.SetFillColor(235, 240, 250)
+			techStackRows = append(techStackRows, labelValueHTML{"言語 / Languages", strings.Join(data.TechStack.Languages, ", ")})
+			hasTechStack = true
 		}
-
 		if len(data.TechStack.Frameworks) > 0 {
-			pdf.CellFormat(labelW, 6, "  Frameworks / FW", "1", 0, "L", true, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.SetFillColor(255, 255, 255)
-			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Frameworks, ", "), "1", 1, "L", false, 0, "")
-			pdf.SetFont("Helvetica", "B", 9)
-			pdf.SetTextColor(40, 80, 160)
-			pdf.SetFillColor(235, 240, 250)
+			techStackRows = append(techStackRows, labelValueHTML{"FW / Frameworks", strings.Join(data.TechStack.Frameworks, ", ")})
+			hasTechStack = true
 		}
-
 		if len(data.TechStack.Databases) > 0 {
-			pdf.CellFormat(labelW, 6, "  Databases / DB", "1", 0, "L", true, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.SetFillColor(255, 255, 255)
-			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Databases, ", "), "1", 1, "L", false, 0, "")
-			pdf.SetFont("Helvetica", "B", 9)
-			pdf.SetTextColor(40, 80, 160)
-			pdf.SetFillColor(235, 240, 250)
+			techStackRows = append(techStackRows, labelValueHTML{"DB / Databases", strings.Join(data.TechStack.Databases, ", ")})
+			hasTechStack = true
 		}
-
 		if len(data.TechStack.Infrastructure) > 0 {
-			pdf.CellFormat(labelW, 6, "  Infrastructure / インフラ", "1", 0, "L", true, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.SetFillColor(255, 255, 255)
-			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Infrastructure, ", "), "1", 1, "L", false, 0, "")
-			pdf.SetFont("Helvetica", "B", 9)
-			pdf.SetTextColor(40, 80, 160)
-			pdf.SetFillColor(235, 240, 250)
+			techStackRows = append(techStackRows, labelValueHTML{"インフラ / Infrastructure", strings.Join(data.TechStack.Infrastructure, ", ")})
+			hasTechStack = true
 		}
-
 		if len(data.TechStack.Tools) > 0 {
-			pdf.CellFormat(labelW, 6, "  Tools / ツール", "1", 0, "L", true, 0, "")
-			pdf.SetFont("Helvetica", "", 9)
-			pdf.SetTextColor(30, 30, 30)
-			pdf.SetFillColor(255, 255, 255)
-			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Tools, ", "), "1", 1, "L", false, 0, "")
-		}
-
-		pdf.Ln(4)
-	}
-
-	// Fallback to simple skills if TechStack not provided
-	if data.TechStack == nil && len(data.Skills) > 0 {
-		addShokumuSectionHeader(pdf, "Skills / スキル")
-		pdf.SetFont("Helvetica", "", 10)
-		pdf.SetTextColor(40, 40, 40)
-		pdf.MultiCell(0, 5, strings.Join(data.Skills, " / "), "1", "L", false)
-		pdf.Ln(4)
-	}
-
-	// ---- Education (brief) ----
-	if len(data.Education) > 0 {
-		addShokumuSectionHeader(pdf, "Education / 学歴")
-		pdf.SetFont("Helvetica", "", 9)
-		pdf.SetTextColor(40, 40, 40)
-
-		for _, edu := range data.Education {
-			label := fmt.Sprintf("%s – %s: %s", edu.StartDate, edu.EndDate, edu.Institution)
-			if edu.Degree != "" {
-				label += fmt.Sprintf(" (%s", edu.Degree)
-				if edu.Field != "" {
-					label += " – " + edu.Field
-				}
-				label += ")"
-			}
-			pdf.CellFormat(0, 5, "  • "+label, "", 1, "L", false, 0, "")
-		}
-		pdf.Ln(3)
-	}
-
-	// ---- Languages ----
-	if len(data.Languages) > 0 {
-		addShokumuSectionHeader(pdf, "Languages / 語学")
-		for _, lang := range data.Languages {
-			label := lang.Name
-			if lang.Proficiency != "" {
-				label += fmt.Sprintf(" (%s)", lang.Proficiency)
-			}
-			pdf.SetFont("Helvetica", "", 10)
-			pdf.SetTextColor(40, 40, 40)
-			pdf.CellFormat(0, 5, "  • "+label, "", 1, "L", false, 0, "")
+			techStackRows = append(techStackRows, labelValueHTML{"ツール / Tools", strings.Join(data.TechStack.Tools, ", ")})
+			hasTechStack = true
 		}
 	}
 
-	return pdfToBytes(pdf)
-}
+	td := shokumuHTMLData{
+		Name:          data.Name,
+		Email:         data.Email,
+		Phone:         data.Phone,
+		Summary:       data.Summary,
+		Experience:    exps,
+		Education:     data.Education,
+		Skills:        data.Skills,
+		SkillsLine:    strings.Join(data.Skills, " / "),
+		Languages:     data.Languages,
+		TechStackRows: techStackRows,
+		HasTechStack:  hasTechStack,
+	}
 
-func addShokumuSectionHeader(pdf *fpdf.Fpdf, title string) {
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFillColor(40, 80, 160)
-	pdf.CellFormat(0, 7, "  "+title, "", 1, "L", true, 0, "")
-	pdf.Ln(1)
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}
+	tmpl, err := template.New("shokumu").Funcs(funcMap).Parse(shokumuTmplSrc)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, td); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 

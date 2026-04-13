@@ -26,7 +26,7 @@ See `skills/memory-and-state/SKILL.md` for when to read and write.
 ## 2026-04-13: Go backend + vanilla JS frontend for CV generator
 
 - **Context**: Issue requested a CV generator with Go backend, frontend form, and multi-template PDF/Word output.
-- **Decision**: Go standard-library HTTP server (`net/http`) serves both the REST API (`POST /api/generate`) and the static frontend files. No framework dependency. PDF uses `github.com/go-pdf/fpdf`. DOCX is generated as raw ZIP+XML (Go stdlib `archive/zip`) — no Word library required.
+- **Decision**: Go standard-library HTTP server (`net/http`) serves both the REST API (`POST /api/generate`) and the static frontend files. No framework dependency. PDF uses `github.com/chromedp/chromedp` (headless Chromium) to render HTML/CSS templates, enabling full CJK/Unicode support. DOCX is generated as raw ZIP+XML (Go stdlib `archive/zip`) — no Word library required.
 - **Alternatives considered**: Echo/Gin frameworks (rejected — adds dependency for a single endpoint). `unioffice` for DOCX (rejected — commercial license, heavyweight). React/Vue for frontend (rejected — overkill for a form with a single API call).
 - **Constraints introduced**: Adding new output formats requires a new generator function in `backend/generators/` and a new case in `handlers/cv_handler.go`. Template styles are selected via `CVData.Template` field; new templates extend the existing switch in each generator.
 
@@ -36,7 +36,7 @@ See `skills/memory-and-state/SKILL.md` for when to read and write.
 
 - **Context**: Issue explicitly requested support for Japan (履歴書) and simple/Western CV styles.
 - **Decision**: `simple` uses a two-column header + section-separator layout suited for Western CVs. `japan` uses a 2-column table for personal info and section tables styled after the standard Japanese 履歴書 (Rirekisho) format, including Japan-specific fields (birth date, gender, nationality).
-- **Alternatives considered**: Storing templates as external files (rejected — increases deployment complexity). HTML-to-PDF conversion (rejected — requires headless browser or wkhtmltopdf, complicates deployment).
+- **Alternatives considered**: Storing templates as external files (rejected — increases deployment complexity). Pure-Go PDF library (`fpdf`) — rejected because `fpdf` core fonts do not support CJK characters, causing Japanese text to render as blanks or garbled output.
 - **Constraints introduced**: Japan template exposes `birth_date`, `gender`, and `nationality` fields; these should remain optional so the form degrades gracefully when the simple template is selected.
 
 ---
@@ -52,3 +52,18 @@ See `skills/memory-and-state/SKILL.md` for when to read and write.
   - `TechStack` and detailed experience fields (`project`, `role`, `tech_stack`) are optional and primarily used by the `shokumu` template.
   - Frontend shows/hides shokumu-specific fields based on template selection.
   - Adding future Japanese document types (e.g., カバーレター cover letter) should follow the same template extension pattern.
+
+---
+
+## 2026-04-13: Switched PDF generation from fpdf to chromedp (headless Chromium)
+
+- **Context**: `github.com/go-pdf/fpdf` core fonts are Latin-only; Japanese characters (CJK) render as blank boxes or garbled output. All three templates (`simple`, `japan`, `shokumu`) output bilingual content (English/Japanese) that requires proper CJK rendering.
+- **Decision**: Replace `fpdf` with `github.com/chromedp/chromedp`. Each template is defined as an HTML/CSS Go template string. `GeneratePDF` renders the HTML in memory using headless Chromium and calls `page.PrintToPDF` (A4, with background). The system font `Noto Sans CJK JP` (package `fonts-noto-cjk`) is used; Chromium resolves it automatically from the OS font stack.
+- **Alternatives considered**:
+  - `wkhtmltopdf` (rejected — requires separate binary install, less actively maintained).
+  - `fpdf` with embedded TTF via `AddUTF8FontFromBytes` (rejected — fpdf layout primitives are limited; CSS/HTML gives richer, more maintainable layouts).
+- **Constraints introduced**:
+  - Chromium binary must be available on the host (`chromium`, `chromium-browser`, or `google-chrome`). Debian/Ubuntu package: `chromium`.
+  - `fonts-noto-cjk` (or equivalent CJK font) must be installed for Japanese text to render correctly.
+  - PDF generation starts a short-lived Chromium process per request; CPU/memory footprint is higher than pure-Go approaches. Suitable for low-to-moderate traffic.
+  - `--no-sandbox` and `--disable-dev-shm-usage` flags are set to allow running as root inside containers/CI.
