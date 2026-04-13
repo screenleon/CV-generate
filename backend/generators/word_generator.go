@@ -16,6 +16,8 @@ func GenerateWord(data *models.CVData) ([]byte, error) {
 	switch strings.ToLower(data.Template) {
 	case "japan":
 		return generateJapanDocx(data)
+	case "shokumu":
+		return generateShokumuDocx(data)
 	default:
 		return generateSimpleDocx(data)
 	}
@@ -539,3 +541,349 @@ func generateJapanDocx(data *models.CVData) ([]byte, error) {
 		{name: "word/document.xml", content: docBuf.String()},
 	})
 }
+
+// -------------------------------------------------------------------
+// Shokumu (職務経歴書) template - Detailed work history
+// -------------------------------------------------------------------
+
+const shokumuDocxTmpl = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>
+  <!-- Title -->
+  <w:p>
+    <w:pPr><w:jc w:val="center"/><w:pStyle w:val="JapanTitle"/></w:pPr>
+    <w:r><w:t>職務経歴書 / Professional Resume</w:t></w:r>
+  </w:p>
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+
+  <!-- Personal Information (compact) -->
+  <w:p>
+    <w:pPr><w:pStyle w:val="JapanSection"/>
+      <w:shd w:val="clear" w:color="auto" w:fill="28509F"/>
+    </w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Personal Information / 個人情報</w:t>
+    </w:r>
+  </w:p>
+  <w:tbl>
+    <w:tblPr><w:tblW w:w="9000" w:type="dxa"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/>
+        <w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/>
+        <w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>
+      </w:tblBorders>
+    </w:tblPr>
+    {{range .PersonalFields}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2500" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="E0E8F5"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{.Label}}</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="6500" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{.Value}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{end}}
+  </w:tbl>
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+
+{{if .Summary}}
+  <!-- Professional Summary -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="28509F"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Professional Summary / 職務概要</w:t>
+    </w:r>
+  </w:p>
+  <w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr>
+    <w:t xml:space="preserve">{{.Summary}}</w:t>
+  </w:r></w:p>
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+{{end}}
+
+{{if .Experience}}
+  <!-- Work Experience -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="28509F"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Work Experience / 職務経歴</w:t>
+    </w:r>
+  </w:p>
+  {{range $idx, $exp := .Experience}}
+  <!-- Company header -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="EBF0FA"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr>
+      <w:t xml:space="preserve">【{{add $idx 1}}】 {{$exp.Company}}  ({{$exp.StartDate}} – {{$exp.EndDateDisplay}})</w:t>
+    </w:r>
+  </w:p>
+  <!-- Details table -->
+  <w:tbl>
+    <w:tblPr><w:tblW w:w="9000" w:type="dxa"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/>
+        <w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/>
+        <w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>
+      </w:tblBorders>
+    </w:tblPr>
+    {{if $exp.Project}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">Project / 案件</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="7000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{$exp.Project}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{end}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">Position / 役職</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="7000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{$exp.Position}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{if $exp.Role}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">Role / 担当業務</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="7000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{$exp.Role}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{end}}
+    {{if $exp.Description}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">Details / 詳細</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="7000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="17"/></w:rPr>
+          <w:t xml:space="preserve">{{$exp.Description}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{end}}
+    {{if $exp.TechStackLine}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">Tech Stack / 技術</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="7000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="17"/></w:rPr>
+          <w:t xml:space="preserve">{{$exp.TechStackLine}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{end}}
+  </w:tbl>
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+  {{end}}
+{{end}}
+
+{{if .HasTechStack}}
+  <!-- Technical Skills -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="28509F"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Technical Skills / スキル一覧</w:t>
+    </w:r>
+  </w:p>
+  <w:tbl>
+    <w:tblPr><w:tblW w:w="9000" w:type="dxa"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/>
+        <w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/>
+        <w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>
+      </w:tblBorders>
+    </w:tblPr>
+    {{range .TechStackRows}}
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="2500" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="EBF0FA"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:b/><w:color w:val="28509F"/><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{.Label}}</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="6500" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr>
+          <w:t xml:space="preserve">{{.Value}}</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+    {{end}}
+  </w:tbl>
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+{{end}}
+
+{{if .SkillsLine}}
+  <!-- Simple Skills -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="28509F"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Skills / スキル</w:t>
+    </w:r>
+  </w:p>
+  <w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>{{.SkillsLine}}</w:t></w:r></w:p>
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+{{end}}
+
+{{if .Education}}
+  <!-- Education -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="28509F"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Education / 学歴</w:t>
+    </w:r>
+  </w:p>
+  {{range .Education}}
+  <w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr>
+    <w:t xml:space="preserve">• {{.StartDate}} – {{.EndDate}}: {{.Institution}}{{if .Degree}} ({{.Degree}}{{if .Field}} – {{.Field}}{{end}}){{end}}</w:t>
+  </w:r></w:p>
+  {{end}}
+  <w:p><w:r><w:t></w:t></w:r></w:p>
+{{end}}
+
+{{if .Languages}}
+  <!-- Languages -->
+  <w:p>
+    <w:pPr><w:shd w:val="clear" w:color="auto" w:fill="28509F"/></w:pPr>
+    <w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/></w:rPr>
+      <w:t>Languages / 語学</w:t>
+    </w:r>
+  </w:p>
+  {{range .Languages}}
+  <w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr>
+    <w:t xml:space="preserve">• {{.Name}}{{if .Proficiency}} ({{.Proficiency}}){{end}}</w:t>
+  </w:r></w:p>
+  {{end}}
+{{end}}
+
+  <w:sectPr/>
+</w:body>
+</w:document>`
+
+type shokumuDocxData struct {
+	models.CVData
+	PersonalFields []labelValue
+	SkillsLine     string
+	Experience     []shokumuExpView
+	Education      []models.Education
+	Languages      []models.Language
+	TechStackRows  []labelValue
+	HasTechStack   bool
+}
+
+type shokumuExpView struct {
+	models.Experience
+	EndDateDisplay string
+	TechStackLine  string
+}
+
+func generateShokumuDocx(data *models.CVData) ([]byte, error) {
+	// Build personal fields (compact)
+	fields := []labelValue{
+		{Label: "Name / 氏名", Value: xmlEscape(data.Name)},
+	}
+	if data.Email != "" {
+		fields = append(fields, labelValue{"Email / メール", xmlEscape(data.Email)})
+	}
+	if data.Phone != "" {
+		fields = append(fields, labelValue{"Phone / 電話", xmlEscape(data.Phone)})
+	}
+
+	// Build experience views
+	exps := make([]shokumuExpView, len(data.Experience))
+	for i, e := range data.Experience {
+		end := e.EndDate
+		if end == "" {
+			end = "Present / 現在"
+		}
+		techLine := ""
+		if len(e.TechStack) > 0 {
+			techLine = xmlEscape(strings.Join(e.TechStack, ", "))
+		}
+		exps[i] = shokumuExpView{
+			Experience:     e,
+			EndDateDisplay: end,
+			TechStackLine:  techLine,
+		}
+		exps[i].Experience.Company = xmlEscape(e.Company)
+		exps[i].Experience.Position = xmlEscape(e.Position)
+		exps[i].Experience.Project = xmlEscape(e.Project)
+		exps[i].Experience.Role = xmlEscape(e.Role)
+		exps[i].Experience.Description = xmlEscape(e.Description)
+	}
+
+	// Build tech stack rows
+	techStackRows := []labelValue{}
+	hasTechStack := false
+	if data.TechStack != nil {
+		if len(data.TechStack.Languages) > 0 {
+			techStackRows = append(techStackRows, labelValue{"Languages / 言語", xmlEscape(strings.Join(data.TechStack.Languages, ", "))})
+			hasTechStack = true
+		}
+		if len(data.TechStack.Frameworks) > 0 {
+			techStackRows = append(techStackRows, labelValue{"Frameworks / FW", xmlEscape(strings.Join(data.TechStack.Frameworks, ", "))})
+			hasTechStack = true
+		}
+		if len(data.TechStack.Databases) > 0 {
+			techStackRows = append(techStackRows, labelValue{"Databases / DB", xmlEscape(strings.Join(data.TechStack.Databases, ", "))})
+			hasTechStack = true
+		}
+		if len(data.TechStack.Infrastructure) > 0 {
+			techStackRows = append(techStackRows, labelValue{"Infrastructure / インフラ", xmlEscape(strings.Join(data.TechStack.Infrastructure, ", "))})
+			hasTechStack = true
+		}
+		if len(data.TechStack.Tools) > 0 {
+			techStackRows = append(techStackRows, labelValue{"Tools / ツール", xmlEscape(strings.Join(data.TechStack.Tools, ", "))})
+			hasTechStack = true
+		}
+	}
+
+	skillsLine := ""
+	if !hasTechStack && len(data.Skills) > 0 {
+		skillsLine = xmlEscape(strings.Join(data.Skills, " / "))
+	}
+
+	td := shokumuDocxData{
+		CVData:         *data,
+		PersonalFields: fields,
+		SkillsLine:     skillsLine,
+		Experience:     exps,
+		Education:      data.Education,
+		Languages:      data.Languages,
+		TechStackRows:  techStackRows,
+		HasTechStack:   hasTechStack,
+	}
+	td.CVData.Summary = xmlEscape(data.Summary)
+
+	// Custom template funcs for shokumu
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	}
+
+	tmpl, err := template.New("doc").Funcs(funcMap).Parse(shokumuDocxTmpl)
+	if err != nil {
+		return nil, fmt.Errorf("template parse error: %w", err)
+	}
+	var docBuf bytes.Buffer
+	if err := tmpl.Execute(&docBuf, td); err != nil {
+		return nil, fmt.Errorf("template execute error: %w", err)
+	}
+
+	return buildDocx([]docxFile{
+		{name: "[Content_Types].xml", content: contentTypesXML},
+		{name: "_rels/.rels", content: relsXML},
+		{name: "word/_rels/document.xml.rels", content: wordRelsXML},
+		{name: "word/styles.xml", content: japanStylesXML},
+		{name: "word/document.xml", content: docBuf.String()},
+	})
+}
+

@@ -23,7 +23,8 @@
             <label for="template">Template Style</label>
             <select id="template" name="template">
               <option value="simple">Simple (Modern Western)</option>
-              <option value="japan">Japan (履歴書 Rirekisho)</option>
+              <option value="japan">Japan 履歴書 (Rirekisho - Basic CV)</option>
+              <option value="shokumu">Japan 職務経歴書 (Shokumu Keirekisho - Detailed Work History)</option>
             </select>
           </div>
           <div class="field">
@@ -126,6 +127,36 @@
         </div>
       </section>
 
+      <!-- ── Tech Stack (for 職務経歴書 template) ─────────────── -->
+      <section class="card shokumu-only hidden" id="tech-stack-section">
+        <h2>Tech Stack / スキル一覧 <span class="hint">(for 職務経歴書 template)</span></h2>
+        <div class="field">
+          <label for="tech_languages">Programming Languages / 言語 <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_languages" name="tech_languages"
+            placeholder="Java, Go, TypeScript, Python" />
+        </div>
+        <div class="field">
+          <label for="tech_frameworks">Frameworks / FW <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_frameworks" name="tech_frameworks"
+            placeholder="Spring Boot, React, Vue.js" />
+        </div>
+        <div class="field">
+          <label for="tech_databases">Databases / DB <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_databases" name="tech_databases"
+            placeholder="PostgreSQL, MongoDB, Redis" />
+        </div>
+        <div class="field">
+          <label for="tech_infrastructure">Infrastructure / インフラ <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_infrastructure" name="tech_infrastructure"
+            placeholder="AWS, Docker, Kubernetes, Terraform" />
+        </div>
+        <div class="field">
+          <label for="tech_tools">Tools / ツール <span class="hint">(comma-separated)</span></label>
+          <input type="text" id="tech_tools" name="tech_tools"
+            placeholder="Git, Jenkins, JIRA, Slack" />
+        </div>
+      </section>
+
       <!-- ── Languages ─────────────────────────────────────── -->
       <section class="card">
         <h2>Languages</h2>
@@ -172,6 +203,19 @@
       <div class="field"><label>Description</label>
         <textarea name="description" rows="2"
           placeholder="Key responsibilities and achievements…"></textarea>
+      </div>
+      <!-- Shokumu-specific fields -->
+      <div class="shokumu-fields hidden">
+        <div class="field"><label>Project Name / 案件 <span class="hint">(for 職務経歴書)</span></label>
+          <input type="text" name="project" placeholder="E-commerce Platform Development" />
+        </div>
+        <div class="field"><label>Detailed Role / 担当業務 <span class="hint">(for 職務経歴書)</span></label>
+          <textarea name="role" rows="2"
+            placeholder="API design and implementation, Database optimization…"></textarea>
+        </div>
+        <div class="field"><label>Tech Stack / 技術 <span class="hint">(comma-separated, for 職務経歴書)</span></label>
+          <input type="text" name="tech_stack" placeholder="Java, Spring Boot, PostgreSQL, AWS" />
+        </div>
       </div>
     </div>
   </template>

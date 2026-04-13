@@ -38,3 +38,17 @@ See `skills/memory-and-state/SKILL.md` for when to read and write.
 - **Decision**: `simple` uses a two-column header + section-separator layout suited for Western CVs. `japan` uses a 2-column table for personal info and section tables styled after the standard Japanese 履歴書 (Rirekisho) format, including Japan-specific fields (birth date, gender, nationality).
 - **Alternatives considered**: Storing templates as external files (rejected — increases deployment complexity). HTML-to-PDF conversion (rejected — requires headless browser or wkhtmltopdf, complicates deployment).
 - **Constraints introduced**: Japan template exposes `birth_date`, `gender`, and `nationality` fields; these should remain optional so the form degrades gracefully when the simple template is selected.
+
+---
+
+## 2026-04-13: Added 職務経歴書 (Shokumu Keirekisho) template for detailed work history
+
+- **Context**: User feedback requested support for the Japanese 職務経歴書 (Shokumu Keirekisho) format — a detailed professional resume focused on work experience, technical skills, and contributions. This is distinct from the basic 履歴書 (Rirekisho) and is more important for engineers in Japanese job applications.
+- **Decision**: Added `"shokumu"` as a third template option. Extended `CVData` model with `TechStack` (categorized skills: languages, frameworks, databases, infrastructure, tools) and extended `Experience` struct with `Project`, `Role`, and per-job `TechStack` fields. Template emphasizes work history details over personal info (only name, email, phone shown in compact header). Skills section uses categorized table format when `TechStack` is provided.
+- **Alternatives considered**:
+  - Merging shokumu features into the existing `japan` template (rejected — 履歴書 and 職務経歴書 serve different purposes and have different layouts).
+  - Using a single `skills` array for all templates (rejected — 職務経歴書 requires categorized skills for readability, per Japanese conventions).
+- **Constraints introduced**:
+  - `TechStack` and detailed experience fields (`project`, `role`, `tech_stack`) are optional and primarily used by the `shokumu` template.
+  - Frontend shows/hides shokumu-specific fields based on template selection.
+  - Adding future Japanese document types (e.g., カバーレター cover letter) should follow the same template extension pattern.

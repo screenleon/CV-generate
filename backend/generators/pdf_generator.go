@@ -15,6 +15,8 @@ func GeneratePDF(data *models.CVData) ([]byte, error) {
 	switch strings.ToLower(data.Template) {
 	case "japan":
 		return generateJapanPDF(data)
+	case "shokumu":
+		return generateShokumuPDF(data)
 	default:
 		return generateSimplePDF(data)
 	}
@@ -332,3 +334,247 @@ func pdfToBytes(pdf *fpdf.Fpdf) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+// -------------------------------------------------------------------
+// Shokumu (職務経歴書) template - Detailed work history for engineers
+// -------------------------------------------------------------------
+
+func generateShokumuPDF(data *models.CVData) ([]byte, error) {
+	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.AddPage()
+
+	pageW := 180.0 // usable width (210 - 30 margins)
+
+	// ---- Title ----
+	pdf.SetFont("Helvetica", "B", 18)
+	pdf.SetTextColor(20, 20, 20)
+	pdf.CellFormat(0, 10, "職務経歴書 / Professional Resume", "", 1, "C", false, 0, "")
+	pdf.Ln(4)
+
+	// ---- Personal Information (compact) ----
+	pdf.SetFont("Helvetica", "B", 11)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFillColor(40, 80, 160)
+	pdf.CellFormat(0, 7, "  Personal Information / 個人情報", "", 1, "L", true, 0, "")
+	pdf.Ln(1)
+
+	addJapanField(pdf, pageW, "Name / 氏名", data.Name)
+	addJapanField(pdf, pageW, "Email / メール", data.Email)
+	if data.Phone != "" {
+		addJapanField(pdf, pageW, "Phone / 電話", data.Phone)
+	}
+	pdf.Ln(4)
+
+	// ---- Professional Summary / 職務概要 ----
+	if data.Summary != "" {
+		addShokumuSectionHeader(pdf, "Professional Summary / 職務概要")
+		pdf.SetFont("Helvetica", "", 10)
+		pdf.SetTextColor(40, 40, 40)
+		pdf.MultiCell(0, 5, data.Summary, "1", "L", false)
+		pdf.Ln(4)
+	}
+
+	// ---- Detailed Work History / 職務経歴 ----
+	if len(data.Experience) > 0 {
+		addShokumuSectionHeader(pdf, "Work Experience / 職務経歴")
+
+		for idx, exp := range data.Experience {
+			// Company header with period
+			pdf.SetFont("Helvetica", "B", 11)
+			pdf.SetFillColor(235, 240, 250)
+			pdf.SetTextColor(30, 30, 30)
+			endDate := exp.EndDate
+			if endDate == "" {
+				endDate = "Present / 現在"
+			}
+			period := fmt.Sprintf("%s – %s", exp.StartDate, endDate)
+
+			pdf.CellFormat(0, 7, fmt.Sprintf("  【%d】 %s  (%s)", idx+1, exp.Company, period), "1", 1, "L", true, 0, "")
+
+			// Project / Position
+			if exp.Project != "" {
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.SetTextColor(40, 80, 160)
+				pdf.SetFillColor(255, 255, 255)
+				pdf.CellFormat(40, 6, "  Project / 案件", "1", 0, "L", true, 0, "")
+				pdf.SetFont("Helvetica", "", 10)
+				pdf.SetTextColor(30, 30, 30)
+				pdf.CellFormat(pageW-40, 6, "  "+exp.Project, "1", 1, "L", false, 0, "")
+			}
+
+			// Position
+			pdf.SetFont("Helvetica", "B", 10)
+			pdf.SetTextColor(40, 80, 160)
+			pdf.SetFillColor(255, 255, 255)
+			pdf.CellFormat(40, 6, "  Position / 役職", "1", 0, "L", true, 0, "")
+			pdf.SetFont("Helvetica", "", 10)
+			pdf.SetTextColor(30, 30, 30)
+			pdf.CellFormat(pageW-40, 6, "  "+exp.Position, "1", 1, "L", false, 0, "")
+
+			// Role / Responsibilities
+			if exp.Role != "" {
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.SetTextColor(40, 80, 160)
+				pdf.CellFormat(40, 6, "  Role / 担当業務", "1", 0, "L", true, 0, "")
+				pdf.SetFont("Helvetica", "", 9)
+				pdf.SetTextColor(30, 30, 30)
+
+				// MultiCell for role (may wrap)
+				x := pdf.GetX()
+				y := pdf.GetY()
+				pdf.SetXY(x+40, y)
+				pdf.MultiCell(pageW-40, 5, "  "+exp.Role, "1", "L", false)
+			}
+
+			// Description
+			if exp.Description != "" {
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.SetTextColor(40, 80, 160)
+				pdf.CellFormat(40, 6, "  Details / 詳細", "1", 0, "L", true, 0, "")
+				pdf.SetFont("Helvetica", "", 9)
+				pdf.SetTextColor(30, 30, 30)
+
+				x := pdf.GetX()
+				y := pdf.GetY()
+				pdf.SetXY(x+40, y)
+				pdf.MultiCell(pageW-40, 5, "  "+exp.Description, "1", "L", false)
+			}
+
+			// Tech Stack
+			if len(exp.TechStack) > 0 {
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.SetTextColor(40, 80, 160)
+				pdf.CellFormat(40, 6, "  Tech Stack / 技術", "1", 0, "L", true, 0, "")
+				pdf.SetFont("Helvetica", "", 9)
+				pdf.SetTextColor(30, 30, 30)
+				pdf.CellFormat(pageW-40, 6, "  "+strings.Join(exp.TechStack, ", "), "1", 1, "L", false, 0, "")
+			}
+
+			pdf.Ln(3)
+		}
+	}
+
+	// ---- Technical Skills / スキル一覧 ----
+	if data.TechStack != nil && (len(data.TechStack.Languages) > 0 || len(data.TechStack.Frameworks) > 0 ||
+		len(data.TechStack.Databases) > 0 || len(data.TechStack.Infrastructure) > 0 || len(data.TechStack.Tools) > 0) {
+
+		addShokumuSectionHeader(pdf, "Technical Skills / スキル一覧")
+
+		// Build categorized skills table
+		pdf.SetFont("Helvetica", "B", 9)
+		pdf.SetFillColor(235, 240, 250)
+		pdf.SetTextColor(40, 80, 160)
+
+		labelW := 45.0
+		valueW := pageW - labelW
+
+		if len(data.TechStack.Languages) > 0 {
+			pdf.CellFormat(labelW, 6, "  Languages / 言語", "1", 0, "L", true, 0, "")
+			pdf.SetFont("Helvetica", "", 9)
+			pdf.SetTextColor(30, 30, 30)
+			pdf.SetFillColor(255, 255, 255)
+			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Languages, ", "), "1", 1, "L", false, 0, "")
+			pdf.SetFont("Helvetica", "B", 9)
+			pdf.SetTextColor(40, 80, 160)
+			pdf.SetFillColor(235, 240, 250)
+		}
+
+		if len(data.TechStack.Frameworks) > 0 {
+			pdf.CellFormat(labelW, 6, "  Frameworks / FW", "1", 0, "L", true, 0, "")
+			pdf.SetFont("Helvetica", "", 9)
+			pdf.SetTextColor(30, 30, 30)
+			pdf.SetFillColor(255, 255, 255)
+			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Frameworks, ", "), "1", 1, "L", false, 0, "")
+			pdf.SetFont("Helvetica", "B", 9)
+			pdf.SetTextColor(40, 80, 160)
+			pdf.SetFillColor(235, 240, 250)
+		}
+
+		if len(data.TechStack.Databases) > 0 {
+			pdf.CellFormat(labelW, 6, "  Databases / DB", "1", 0, "L", true, 0, "")
+			pdf.SetFont("Helvetica", "", 9)
+			pdf.SetTextColor(30, 30, 30)
+			pdf.SetFillColor(255, 255, 255)
+			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Databases, ", "), "1", 1, "L", false, 0, "")
+			pdf.SetFont("Helvetica", "B", 9)
+			pdf.SetTextColor(40, 80, 160)
+			pdf.SetFillColor(235, 240, 250)
+		}
+
+		if len(data.TechStack.Infrastructure) > 0 {
+			pdf.CellFormat(labelW, 6, "  Infrastructure / インフラ", "1", 0, "L", true, 0, "")
+			pdf.SetFont("Helvetica", "", 9)
+			pdf.SetTextColor(30, 30, 30)
+			pdf.SetFillColor(255, 255, 255)
+			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Infrastructure, ", "), "1", 1, "L", false, 0, "")
+			pdf.SetFont("Helvetica", "B", 9)
+			pdf.SetTextColor(40, 80, 160)
+			pdf.SetFillColor(235, 240, 250)
+		}
+
+		if len(data.TechStack.Tools) > 0 {
+			pdf.CellFormat(labelW, 6, "  Tools / ツール", "1", 0, "L", true, 0, "")
+			pdf.SetFont("Helvetica", "", 9)
+			pdf.SetTextColor(30, 30, 30)
+			pdf.SetFillColor(255, 255, 255)
+			pdf.CellFormat(valueW, 6, "  "+strings.Join(data.TechStack.Tools, ", "), "1", 1, "L", false, 0, "")
+		}
+
+		pdf.Ln(4)
+	}
+
+	// Fallback to simple skills if TechStack not provided
+	if data.TechStack == nil && len(data.Skills) > 0 {
+		addShokumuSectionHeader(pdf, "Skills / スキル")
+		pdf.SetFont("Helvetica", "", 10)
+		pdf.SetTextColor(40, 40, 40)
+		pdf.MultiCell(0, 5, strings.Join(data.Skills, " / "), "1", "L", false)
+		pdf.Ln(4)
+	}
+
+	// ---- Education (brief) ----
+	if len(data.Education) > 0 {
+		addShokumuSectionHeader(pdf, "Education / 学歴")
+		pdf.SetFont("Helvetica", "", 9)
+		pdf.SetTextColor(40, 40, 40)
+
+		for _, edu := range data.Education {
+			label := fmt.Sprintf("%s – %s: %s", edu.StartDate, edu.EndDate, edu.Institution)
+			if edu.Degree != "" {
+				label += fmt.Sprintf(" (%s", edu.Degree)
+				if edu.Field != "" {
+					label += " – " + edu.Field
+				}
+				label += ")"
+			}
+			pdf.CellFormat(0, 5, "  • "+label, "", 1, "L", false, 0, "")
+		}
+		pdf.Ln(3)
+	}
+
+	// ---- Languages ----
+	if len(data.Languages) > 0 {
+		addShokumuSectionHeader(pdf, "Languages / 語学")
+		for _, lang := range data.Languages {
+			label := lang.Name
+			if lang.Proficiency != "" {
+				label += fmt.Sprintf(" (%s)", lang.Proficiency)
+			}
+			pdf.SetFont("Helvetica", "", 10)
+			pdf.SetTextColor(40, 40, 40)
+			pdf.CellFormat(0, 5, "  • "+label, "", 1, "L", false, 0, "")
+		}
+	}
+
+	return pdfToBytes(pdf)
+}
+
+func addShokumuSectionHeader(pdf *fpdf.Fpdf, title string) {
+	pdf.SetFont("Helvetica", "B", 11)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFillColor(40, 80, 160)
+	pdf.CellFormat(0, 7, "  "+title, "", 1, "L", true, 0, "")
+	pdf.Ln(1)
+}
+

@@ -26,21 +26,27 @@ type CVData struct {
 	// Skills
 	Skills []string `json:"skills,omitempty"`
 
+	// Categorized skills (for 職務経歴書 template)
+	TechStack *TechStack `json:"tech_stack,omitempty"`
+
 	// Languages spoken
 	Languages []Language `json:"languages,omitempty"`
 
 	// Generation options
-	Template string `json:"template"` // "simple" or "japan"
+	Template string `json:"template"` // "simple", "japan" (履歴書), or "shokumu" (職務経歴書)
 	Format   string `json:"format"`   // "pdf" or "word"
 }
 
 // Experience represents a single work experience entry.
 type Experience struct {
-	Company     string `json:"company"`
-	Position    string `json:"position"`
-	StartDate   string `json:"start_date"`
-	EndDate     string `json:"end_date"` // empty means "Present"
-	Description string `json:"description,omitempty"`
+	Company     string   `json:"company"`
+	Position    string   `json:"position"`
+	StartDate   string   `json:"start_date"`
+	EndDate     string   `json:"end_date"` // empty means "Present"
+	Description string   `json:"description,omitempty"`
+	Project     string   `json:"project,omitempty"`     // Project name (for 職務経歴書)
+	Role        string   `json:"role,omitempty"`        // Detailed role (for 職務経歴書)
+	TechStack   []string `json:"tech_stack,omitempty"`  // Technologies used (for 職務経歴書)
 }
 
 // Education represents a single education entry.
@@ -56,4 +62,13 @@ type Education struct {
 type Language struct {
 	Name        string `json:"name"`
 	Proficiency string `json:"proficiency,omitempty"` // e.g., "Native", "Business", "Conversational"
+}
+
+// TechStack represents categorized technical skills (for 職務経歴書 template).
+type TechStack struct {
+	Languages      []string `json:"languages,omitempty"`      // Programming languages (e.g., Java, Go, TypeScript)
+	Frameworks     []string `json:"frameworks,omitempty"`     // Frameworks (e.g., Spring Boot, React)
+	Databases      []string `json:"databases,omitempty"`      // Databases (e.g., PostgreSQL, MongoDB)
+	Infrastructure []string `json:"infrastructure,omitempty"` // Infrastructure (e.g., AWS, Docker, Kubernetes)
+	Tools          []string `json:"tools,omitempty"`          // Tools (e.g., Git, Jenkins, JIRA)
 }

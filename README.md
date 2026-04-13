@@ -4,11 +4,12 @@ A Go-powered CV generator with a multi-template web frontend. Fill in your detai
 
 ## Features
 
-- **Two template styles**
+- **Three template styles**
   - **Simple** — clean modern layout for Western CVs
-  - **Japan (履歴書)** — structured grid layout following the Japanese Rirekisho format, with Japan-specific fields (birth date, gender, nationality)
+  - **Japan 履歴書 (Rirekisho)** — structured grid layout following the Japanese Rirekisho format (basic CV with personal info, work history, education); includes Japan-specific fields (birth date, gender, nationality)
+  - **Japan 職務経歴書 (Shokumu Keirekisho)** — detailed professional resume for engineers; emphasizes project details, technical skills categorization, and work contributions
 - **Two output formats**: PDF and Word (.docx)
-- **Sections**: personal info, professional summary, work experience, education, skills, and languages
+- **Sections**: personal info, professional summary, work experience (with optional detailed project/role/tech stack for 職務経歴書), education, skills (simple or categorized), and languages
 - **Go backend** — single stateless binary, no database required
 - **Vanilla JS frontend** — no build step, served directly by the Go server
 
@@ -59,9 +60,25 @@ go test ./...
   "gender":      "Female",
   "nationality": "Japanese",
   "summary":     "Senior Go engineer…",
-  "experience":  [{ "company": "Acme", "position": "Engineer", "start_date": "2020-01", "end_date": "", "description": "…" }],
+  "experience":  [{
+    "company": "Acme",
+    "position": "Engineer",
+    "start_date": "2020-01",
+    "end_date": "",
+    "description": "…",
+    "project": "E-commerce Platform",           // Optional, for 職務経歴書
+    "role": "Backend API design…",             // Optional, for 職務経歴書
+    "tech_stack": ["Go", "PostgreSQL", "AWS"]  // Optional, for 職務経歴書
+  }],
   "education":   [{ "institution": "Univ of Tokyo", "degree": "B.Eng", "field": "CS", "start_date": "2014-04", "end_date": "2018-03" }],
   "skills":      ["Go", "Docker", "SQL"],
+  "tech_stack": {                              // Optional, for 職務経歴書
+    "languages": ["Java", "Go", "TypeScript"],
+    "frameworks": ["Spring Boot", "React"],
+    "databases": ["PostgreSQL", "MongoDB"],
+    "infrastructure": ["AWS", "Docker", "Kubernetes"],
+    "tools": ["Git", "Jenkins", "JIRA"]
+  },
   "languages":   [{ "name": "Japanese", "proficiency": "Native" }],
   "template":    "simple",
   "format":      "pdf"
@@ -72,8 +89,16 @@ go test ./...
 
 | Field | Values |
 |-------|--------|
-| `template` | `"simple"` (default) · `"japan"` |
+| `template` | `"simple"` (default) · `"japan"` (履歴書) · `"shokumu"` (職務経歴書) |
 | `format` | `"pdf"` (default) · `"word"` / `"docx"` |
+
+### Template Comparison
+
+| Template | Use Case | Key Features |
+|----------|----------|--------------|
+| **Simple** | Western-style CV | Modern two-column layout, section separators |
+| **Japan 履歴書** | Japanese basic CV (Rirekisho) | Formal grid tables, Japan-specific personal fields (birth date, gender, nationality) |
+| **Japan 職務経歴書** | Japanese detailed work history (Shokumu Keirekisho) | Emphasized work experience with project details, tech stack per job, categorized technical skills |
 
 ---
 

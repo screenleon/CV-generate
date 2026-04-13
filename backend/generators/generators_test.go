@@ -10,7 +10,7 @@ import (
 
 // sampleCV returns a fully-populated CVData for use in tests.
 func sampleCV(template, format string) *models.CVData {
-	return &models.CVData{
+	cv := &models.CVData{
 		Name:        "Tanaka Yuki",
 		Email:       "yuki@example.com",
 		Phone:       "+81-90-1234-5678",
@@ -44,7 +44,7 @@ func sampleCV(template, format string) *models.CVData {
 				EndDate:     "2012-03",
 			},
 		},
-		Skills:   []string{"Go", "Docker", "Kubernetes", "SQL"},
+		Skills: []string{"Go", "Docker", "Kubernetes", "SQL"},
 		Languages: []models.Language{
 			{Name: "Japanese", Proficiency: "Native"},
 			{Name: "English", Proficiency: "Business"},
@@ -52,6 +52,28 @@ func sampleCV(template, format string) *models.CVData {
 		Template: template,
 		Format:   format,
 	}
+
+	// For shokumu template, add detailed tech stack and experience details
+	if template == "shokumu" {
+		cv.TechStack = &models.TechStack{
+			Languages:      []string{"Java", "Go", "TypeScript"},
+			Frameworks:     []string{"Spring Boot", "React"},
+			Databases:      []string{"PostgreSQL", "MongoDB"},
+			Infrastructure: []string{"AWS", "Docker", "Kubernetes"},
+			Tools:          []string{"Git", "Jenkins", "JIRA"},
+		}
+
+		// Add detailed experience fields for shokumu
+		cv.Experience[0].Project = "E-commerce Platform Development"
+		cv.Experience[0].Role = "Backend API design and implementation, database optimization"
+		cv.Experience[0].TechStack = []string{"Go", "PostgreSQL", "Docker", "AWS"}
+
+		cv.Experience[1].Project = "Microservices Migration"
+		cv.Experience[1].Role = "Lead engineer for migrating monolith to microservices"
+		cv.Experience[1].TechStack = []string{"Java", "Spring Boot", "Kubernetes"}
+	}
+
+	return cv
 }
 
 // ── PDF tests ─────────────────────────────────────────────
@@ -82,6 +104,20 @@ func TestGeneratePDF_Japan(t *testing.T) {
 	}
 	if !bytes.HasPrefix(got, []byte("%PDF")) {
 		t.Errorf("GeneratePDF(japan) output does not start with %%PDF header")
+	}
+}
+
+func TestGeneratePDF_Shokumu(t *testing.T) {
+	data := sampleCV("shokumu", "pdf")
+	got, err := generators.GeneratePDF(data)
+	if err != nil {
+		t.Fatalf("GeneratePDF(shokumu) returned error: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("GeneratePDF(shokumu) returned empty bytes")
+	}
+	if !bytes.HasPrefix(got, []byte("%PDF")) {
+		t.Errorf("GeneratePDF(shokumu) output does not start with %%PDF header")
 	}
 }
 
@@ -124,6 +160,20 @@ func TestGenerateWord_Japan(t *testing.T) {
 	}
 	if !bytes.HasPrefix(got, []byte("PK\x03\x04")) {
 		t.Errorf("GenerateWord(japan) output does not start with ZIP/PK header")
+	}
+}
+
+func TestGenerateWord_Shokumu(t *testing.T) {
+	data := sampleCV("shokumu", "word")
+	got, err := generators.GenerateWord(data)
+	if err != nil {
+		t.Fatalf("GenerateWord(shokumu) returned error: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("GenerateWord(shokumu) returned empty bytes")
+	}
+	if !bytes.HasPrefix(got, []byte("PK\x03\x04")) {
+		t.Errorf("GenerateWord(shokumu) output does not start with ZIP/PK header")
 	}
 }
 
