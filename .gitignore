@@ -1,2 +1,10 @@
 .DS_Store
 *.log
+
+# Go build artifacts
+backend/cv-generator
+backend/*.exe
+*.test
+
+# Go module download cache
+vendor/

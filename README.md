@@ -1,8 +1,83 @@
-# Agent Playbook Template
+# CV Generator
 
-## 30-Second TL;DR
+A Go-powered CV generator with a multi-template web frontend. Fill in your details, choose a style, and download a polished PDF or Word document in seconds.
 
-This repository gives your team a reusable AI delivery workflow: clear agent roles, stable operating rules, reusable skills, and decision logging.
+## Features
+
+- **Two template styles**
+  - **Simple** — clean modern layout for Western CVs
+  - **Japan (履歴書)** — structured grid layout following the Japanese Rirekisho format, with Japan-specific fields (birth date, gender, nationality)
+- **Two output formats**: PDF and Word (.docx)
+- **Sections**: personal info, professional summary, work experience, education, skills, and languages
+- **Go backend** — single stateless binary, no database required
+- **Vanilla JS frontend** — no build step, served directly by the Go server
+
+## Quick Start
+
+```bash
+# 1. Build the server
+cd backend
+go build -o cv-generator .
+
+# 2. Run the server (serves frontend automatically)
+FRONTEND_DIR=../frontend ./cv-generator
+# Server starts on http://localhost:8080
+
+# Override port:
+PORT=3000 FRONTEND_DIR=../frontend ./cv-generator
+```
+
+Open **http://localhost:8080** in your browser.
+
+## Development (no build step needed)
+
+```bash
+cd backend
+FRONTEND_DIR=../frontend go run .
+```
+
+## Running Tests
+
+```bash
+cd backend
+go test ./...
+```
+
+## API
+
+`POST /api/generate`
+
+**Request body** (JSON):
+```json
+{
+  "name":        "Tanaka Yuki",
+  "email":       "yuki@example.com",
+  "phone":       "+81-90-1234-5678",
+  "address":     "Tokyo, Japan",
+  "website":     "https://example.com",
+  "birth_date":  "1990-04-01",
+  "gender":      "Female",
+  "nationality": "Japanese",
+  "summary":     "Senior Go engineer…",
+  "experience":  [{ "company": "Acme", "position": "Engineer", "start_date": "2020-01", "end_date": "", "description": "…" }],
+  "education":   [{ "institution": "Univ of Tokyo", "degree": "B.Eng", "field": "CS", "start_date": "2014-04", "end_date": "2018-03" }],
+  "skills":      ["Go", "Docker", "SQL"],
+  "languages":   [{ "name": "Japanese", "proficiency": "Native" }],
+  "template":    "simple",
+  "format":      "pdf"
+}
+```
+
+**Response**: binary file download (`cv.pdf` or `cv.docx`)
+
+| Field | Values |
+|-------|--------|
+| `template` | `"simple"` (default) · `"japan"` |
+| `format` | `"pdf"` (default) · `"word"` / `"docx"` |
+
+---
+
+
 
 Start here in order:
 0. `docs/rules-quickstart.md` (minimal rule load)
