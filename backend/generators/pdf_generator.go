@@ -3,8 +3,10 @@ package generators
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"html/template"
+	"os"
 	"strings"
 	"time"
 
@@ -35,14 +37,20 @@ func GeneratePDF(data *models.CVData) ([]byte, error) {
 }
 
 // htmlToPDF uses headless Chromium to print an HTML string to a PDF byte slice.
+// Set CHROMEDP_NO_SANDBOX=1 to disable the Chromium sandbox (required when
+// running as root inside containers or CI environments).
 func htmlToPDF(htmlContent string) ([]byte, error) {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("no-sandbox", true),
+	allocOpts := chromedp.DefaultExecAllocatorOptions[:]
+	allocOpts = append(allocOpts,
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("headless", true),
 	)
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+	if os.Getenv("CHROMEDP_NO_SANDBOX") == "1" {
+		allocOpts = append(allocOpts, chromedp.Flag("no-sandbox", true))
+	}
+
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), allocOpts...)
 	defer cancelAlloc()
 
 	ctx, cancelCtx := chromedp.NewContext(allocCtx)
@@ -51,8 +59,9 @@ func htmlToPDF(htmlContent string) ([]byte, error) {
 	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
 	defer cancelTimeout()
 
-	// Use a data URI so no file system access is needed.
-	dataURI := "data:text/html;charset=utf-8," + urlEncode(htmlContent)
+	// Use a base64-encoded data URI to avoid any percent-encoding concerns.
+	encoded := base64.StdEncoding.EncodeToString([]byte(htmlContent))
+	dataURI := "data:text/html;base64," + encoded
 
 	var pdfBuf []byte
 	err := chromedp.Run(ctx,
@@ -75,30 +84,6 @@ func htmlToPDF(htmlContent string) ([]byte, error) {
 		return nil, fmt.Errorf("chromedp PrintToPDF: %w", err)
 	}
 	return pdfBuf, nil
-}
-
-// urlEncode percent-encodes an HTML string for use in a data URI.
-// Only characters unsafe in a URI are escaped.
-func urlEncode(s string) string {
-	var buf bytes.Buffer
-	for _, b := range []byte(s) {
-		if isURLSafe(b) {
-			buf.WriteByte(b)
-		} else {
-			fmt.Fprintf(&buf, "%%%02X", b)
-		}
-	}
-	return buf.String()
-}
-
-func isURLSafe(b byte) bool {
-	return (b >= 'A' && b <= 'Z') ||
-		(b >= 'a' && b <= 'z') ||
-		(b >= '0' && b <= '9') ||
-		b == '-' || b == '_' || b == '.' || b == '~' ||
-		b == '!' || b == '\'' || b == '(' || b == ')' || b == '*' ||
-		b == '/' || b == ':' || b == '@' || b == ',' || b == ';' ||
-		b == '+' || b == '=' || b == '?' || b == '#'
 }
 
 // -------------------------------------------------------------------

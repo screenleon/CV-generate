@@ -15,6 +15,18 @@ A Go-powered CV generator with a multi-template web frontend. Fill in your detai
 
 ## Quick Start
 
+### Prerequisites
+
+- **Go 1.21+**
+- **Chromium** (for PDF generation) — `chromium` or `google-chrome` must be on `PATH`
+- **Noto Sans CJK** fonts (for Japanese/Chinese/Korean characters in PDFs)
+
+On Debian/Ubuntu:
+
+```bash
+sudo apt-get install -y chromium fonts-noto-cjk
+```
+
 ```bash
 # 1. Build the server
 cd backend
@@ -30,6 +42,8 @@ PORT=3000 FRONTEND_DIR=../frontend ./cv-generator
 
 Open **http://localhost:8080** in your browser.
 
+> **Container / CI note**: set `CHROMEDP_NO_SANDBOX=1` when running as root (e.g., inside Docker) so Chromium can start without a user namespace sandbox.
+
 ## Development (no build step needed)
 
 ```bash
@@ -41,7 +55,7 @@ FRONTEND_DIR=../frontend go run .
 
 ```bash
 cd backend
-go test ./...
+CHROMEDP_NO_SANDBOX=1 go test ./...
 ```
 
 ## API
