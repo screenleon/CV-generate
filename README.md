@@ -49,6 +49,7 @@ go test ./...
 `POST /api/generate`
 
 **Request body** (JSON):
+
 ```json
 {
   "name":        "Tanaka Yuki",
@@ -101,8 +102,6 @@ go test ./...
 | **Japan 職務経歴書** | Japanese detailed work history (Shokumu Keirekisho) | Emphasized work experience with project details, tech stack per job, categorized technical skills |
 
 ---
-
-
 
 Start here in order:
 0. `docs/rules-quickstart.md` (minimal rule load)

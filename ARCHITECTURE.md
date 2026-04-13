@@ -20,7 +20,7 @@
 
 ## Data flow
 
-```
+```text
 Browser (frontend/index.html)
   → POST /api/generate  (JSON: CVData)
     → backend/handlers/GenerateCV
