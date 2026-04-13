@@ -6,9 +6,6 @@ const API_URL = '/api/generate';
 // ── DOM references ────────────────────────────────────────
 const form           = document.getElementById('cv-form');
 const templateSel    = document.getElementById('template');
-const japanFields    = document.getElementById('japan-fields');
-const techStackSection = document.getElementById('tech-stack-section');
-const japanLabel     = document.querySelector('.japan-only.subtitle-badge'); // optional
 const japanOnlyEls   = document.querySelectorAll('.japan-only');
 const shokumuOnlyEls = document.querySelectorAll('.shokumu-only');
 
@@ -222,5 +219,5 @@ function hideError() {
 }
 
 function sanitizeFilename(name) {
-  return name.replace(/[^a-zA-Z0-9\u3000-\u9FFF_-]/g, '_').slice(0, 40);
+  return name.replace(/[^a-zA-Z0-9 \u3040-\u30FF\u3000-\u9FFF_-]/g, '_').slice(0, 40);
 }

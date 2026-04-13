@@ -423,7 +423,7 @@ func generateShokumuPDF(data *models.CVData) ([]byte, error) {
 				// MultiCell for role (may wrap)
 				x := pdf.GetX()
 				y := pdf.GetY()
-				pdf.SetXY(x+40, y)
+				pdf.SetXY(x, y)
 				pdf.MultiCell(pageW-40, 5, "  "+exp.Role, "1", "L", false)
 			}
 
@@ -437,7 +437,7 @@ func generateShokumuPDF(data *models.CVData) ([]byte, error) {
 
 				x := pdf.GetX()
 				y := pdf.GetY()
-				pdf.SetXY(x+40, y)
+				pdf.SetXY(x, y)
 				pdf.MultiCell(pageW-40, 5, "  "+exp.Description, "1", "L", false)
 			}
 

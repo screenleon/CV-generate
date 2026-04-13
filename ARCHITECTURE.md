@@ -38,7 +38,7 @@ server from the `frontend/` directory.
 - `POST /api/generate` — accepts `application/json` body (CVData), returns PDF or DOCX binary
 - `generators.GeneratePDF(data *models.CVData) ([]byte, error)` — PDF generation entry point
 - `generators.GenerateWord(data *models.CVData) ([]byte, error)` — DOCX generation entry point
-- `CVData.Template` — controls layout: `"simple"` (modern Western) or `"japan"` (履歴書 Rirekisho)
+- `CVData.Template` — controls layout: `"simple"` (modern Western), `"japan"` (履歴書 Rirekisho), or `"shokumu"` (職務経歴書 Shokumu Keirekisho)
 - `CVData.Format` — controls output: `"pdf"` or `"word"`/`"docx"`
 
 ## External service dependencies

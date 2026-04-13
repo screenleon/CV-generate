@@ -222,13 +222,31 @@ func generateSimpleDocx(data *models.CVData) ([]byte, error) {
 		exps[i].Experience.Description = xmlEscape(e.Description)
 	}
 
+	escapedEdu := make([]models.Education, len(data.Education))
+	for i, e := range data.Education {
+		escapedEdu[i] = models.Education{
+			Institution: xmlEscape(e.Institution),
+			Degree:      xmlEscape(e.Degree),
+			Field:       xmlEscape(e.Field),
+			StartDate:   xmlEscape(e.StartDate),
+			EndDate:     xmlEscape(e.EndDate),
+		}
+	}
+	escapedLang := make([]models.Language, len(data.Languages))
+	for i, l := range data.Languages {
+		escapedLang[i] = models.Language{
+			Name:        xmlEscape(l.Name),
+			Proficiency: xmlEscape(l.Proficiency),
+		}
+	}
+
 	td := simpleDocxData{
 		CVData:      *data,
 		ContactLine: xmlEscape(strings.Join(contactParts, " | ")),
 		SkillsLine:  xmlEscape(strings.Join(data.Skills, " • ")),
 		Experience:  exps,
-		Education:   data.Education,
-		Languages:   data.Languages,
+		Education:   escapedEdu,
+		Languages:   escapedLang,
 	}
 	td.CVData.Name = xmlEscape(data.Name)
 	td.CVData.Summary = xmlEscape(data.Summary)
@@ -514,13 +532,31 @@ func generateJapanDocx(data *models.CVData) ([]byte, error) {
 		exps[i].Experience.Position = xmlEscape(e.Position)
 	}
 
+	escapedEdu := make([]models.Education, len(data.Education))
+	for i, e := range data.Education {
+		escapedEdu[i] = models.Education{
+			Institution: xmlEscape(e.Institution),
+			Degree:      xmlEscape(e.Degree),
+			Field:       xmlEscape(e.Field),
+			StartDate:   xmlEscape(e.StartDate),
+			EndDate:     xmlEscape(e.EndDate),
+		}
+	}
+	escapedLang := make([]models.Language, len(data.Languages))
+	for i, l := range data.Languages {
+		escapedLang[i] = models.Language{
+			Name:        xmlEscape(l.Name),
+			Proficiency: xmlEscape(l.Proficiency),
+		}
+	}
+
 	td := japanDocxData{
 		CVData:         *data,
 		PersonalFields: fields,
 		SkillsLine:     xmlEscape(strings.Join(data.Skills, " / ")),
 		Experience:     exps,
-		Education:      data.Education,
-		Languages:      data.Languages,
+		Education:      escapedEdu,
+		Languages:      escapedLang,
 	}
 	td.CVData.Summary = xmlEscape(data.Summary)
 
@@ -852,13 +888,31 @@ func generateShokumuDocx(data *models.CVData) ([]byte, error) {
 		skillsLine = xmlEscape(strings.Join(data.Skills, " / "))
 	}
 
+	escapedEdu := make([]models.Education, len(data.Education))
+	for i, e := range data.Education {
+		escapedEdu[i] = models.Education{
+			Institution: xmlEscape(e.Institution),
+			Degree:      xmlEscape(e.Degree),
+			Field:       xmlEscape(e.Field),
+			StartDate:   xmlEscape(e.StartDate),
+			EndDate:     xmlEscape(e.EndDate),
+		}
+	}
+	escapedLang := make([]models.Language, len(data.Languages))
+	for i, l := range data.Languages {
+		escapedLang[i] = models.Language{
+			Name:        xmlEscape(l.Name),
+			Proficiency: xmlEscape(l.Proficiency),
+		}
+	}
+
 	td := shokumuDocxData{
 		CVData:         *data,
 		PersonalFields: fields,
 		SkillsLine:     skillsLine,
 		Experience:     exps,
-		Education:      data.Education,
-		Languages:      data.Languages,
+		Education:      escapedEdu,
+		Languages:      escapedLang,
 		TechStackRows:  techStackRows,
 		HasTechStack:   hasTechStack,
 	}

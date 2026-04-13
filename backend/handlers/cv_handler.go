@@ -19,8 +19,13 @@ func GenerateCV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var data models.CVData
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB limit
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		status := http.StatusBadRequest
+		if err.Error() == "http: request body too large" {
+			status = http.StatusRequestEntityTooLarge
+		}
+		http.Error(w, "Invalid request body: "+err.Error(), status)
 		return
 	}
 

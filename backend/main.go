@@ -16,17 +16,31 @@ func main() {
 		port = "8080"
 	}
 
-	// Resolve frontend directory: allow override via env, default to ../frontend
-	// relative to the directory containing this source file (works with go run).
+	// Resolve frontend directory: allow override via env, otherwise prefer
+	// working-directory-relative locations before falling back to an
+	// executable-relative path for built binaries.
 	frontendDir := os.Getenv("FRONTEND_DIR")
 	if frontendDir == "" {
-		// When run with `go run ./backend` from repo root or with `go run main.go`
-		// from the backend directory, this resolves correctly.
-		exe, err := os.Executable()
-		if err == nil {
-			// Built binary: frontend is sibling of backend directory
-			frontendDir = filepath.Join(filepath.Dir(exe), "..", "frontend")
-		} else {
+		candidates := []string{
+			"../frontend",
+			"./frontend",
+		}
+		for _, candidate := range candidates {
+			if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+				frontendDir = candidate
+				break
+			}
+		}
+		if frontendDir == "" {
+			exe, err := os.Executable()
+			if err == nil {
+				candidate := filepath.Join(filepath.Dir(exe), "..", "frontend")
+				if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+					frontendDir = candidate
+				}
+			}
+		}
+		if frontendDir == "" {
 			frontendDir = "../frontend"
 		}
 	}
@@ -47,13 +61,17 @@ func main() {
 	}
 }
 
-// corsMiddleware adds CORS headers to allow requests from any origin
-// (useful when the frontend is served separately during development).
+// corsMiddleware adds CORS headers. The allowed origin defaults to same-origin
+// (empty, browsers will block cross-origin requests) unless CORS_ORIGIN is set.
+// Set CORS_ORIGIN=* during development to allow all origins.
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	origin := os.Getenv("CORS_ORIGIN")
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
